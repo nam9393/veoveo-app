@@ -59,10 +59,15 @@ export function App() {
   });
 
   const [bgConfig, setBgConfig] = useState<BackgroundConfig>(() => {
-    const def: BackgroundConfig = { mode: 'none', id: '', data: '', op: 35 };
+    const def: BackgroundConfig = { mode: 'preset', id: 'luxury-cabin', data: '', op: 45 };
     try {
       const b0 = JSON.parse(localStorage.getItem('soxe_bg') || 'null');
-      if (b0 && b0.mode) return Object.assign(def, b0);
+      if (b0 && b0.mode) {
+        if (b0.mode === 'preset' && !PRESET_BACKGROUNDS.some((x) => x.id === b0.id)) {
+          b0.id = 'luxury-cabin';
+        }
+        return Object.assign(def, b0);
+      }
     } catch {}
     return def;
   });
@@ -90,7 +95,7 @@ export function App() {
     if (bgConfig.mode === 'img' && bgConfig.data) {
       url = `url("${bgConfig.data}")`;
     } else if (bgConfig.mode === 'preset') {
-      const p = PRESET_BACKGROUNDS.find((x) => x.id === bgConfig.id);
+      const p = PRESET_BACKGROUNDS.find((x) => x.id === bgConfig.id) || PRESET_BACKGROUNDS[0];
       if (p) {
         url = `url("data:image/svg+xml,${encodeURIComponent(p.svg)}")`;
       }
@@ -406,7 +411,7 @@ export function App() {
         />
       )}
 
-      {/* Cockpit Space HUD Navigation Deck */}
+      {/* Cockpit HUD Navigation Deck */}
       {state.vehicles.length > 0 && (
         <div className="hud-nav">
           <button
@@ -414,7 +419,7 @@ export function App() {
             className={`hud-nav-item ${activeNav === 'dashboard' ? 'active' : ''}`}
             onClick={() => handleNavSwitch('dashboard')}
           >
-            🚀 Tổng Quan
+            🚗 Tổng Quan
           </button>
           <button
             type="button"
@@ -442,7 +447,7 @@ export function App() {
             className={`hud-nav-item ${activeNav === 'charts' ? 'active' : ''}`}
             onClick={() => handleNavSwitch('charts')}
           >
-            📊 Radar
+            📊 Biểu Đồ
           </button>
           <button
             type="button"
@@ -456,7 +461,7 @@ export function App() {
             className={`hud-nav-item ${activeNav === 'system' ? 'active' : ''}`}
             onClick={() => handleNavSwitch('system')}
           >
-            🛸 Hệ Thống
+            ⚙️ Cài Đặt
           </button>
         </div>
       )}

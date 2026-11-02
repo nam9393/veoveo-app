@@ -216,6 +216,29 @@ export const DataManager: React.FC<DataManagerProps> = ({
         <button type="button" id="csv" onClick={handleExportCsv}>
           📊 Xuất Excel (.csv)
         </button>
+        <a
+          href="/veoveo-app-source.zip"
+          download="veoveo-app-source.zip"
+          className="pri"
+          style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
+        >
+          📦 Tải Mã Nguồn (.ZIP)
+        </a>
+        <a
+          href="/veoveo-app-web-dist.zip"
+          download="veoveo-app-web-dist.zip"
+          style={{
+            textDecoration: 'none',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '5px',
+            background: 'rgba(0, 255, 136, 0.15)',
+            borderColor: '#00ff88',
+            color: '#00ff88',
+          }}
+        >
+          🚀 Tải Web Tĩnh (.ZIP)
+        </a>
         <button type="button" id="imp" onClick={() => fileInputRef.current?.click()}>
           📂 Mở file sao lưu…
         </button>

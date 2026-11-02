@@ -6,7 +6,8 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
-    "build": "tsc && vite build && cp -r dist docs",
+    "build": "tsc && vite build && mkdir -p docs && cp -r dist/* docs/ && python3 package_zip.py",
+    "pack": "python3 package_zip.py",
     "lint": "tsc --noEmit"
   },
   "dependencies": {

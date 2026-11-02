@@ -16,51 +16,141 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
   soundEnabled,
   onApplyCommand,
 }) => {
+  // Command input voice state
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [commandInput, setCommandInput] = useState('');
   const [statusMessage, setStatusMessage] = useState<string | null>(null);
   const [isProcessing, setIsProcessing] = useState(false);
+
+  // AI Chat state
   const [aiChatOpen, setAiChatOpen] = useState(false);
-  const [aiMessages, setAiMessages] = useState<Array<{ sender: 'user' | 'copilot'; text: string }>>([
+  const [aiMessages, setAiMessages] = useState<Array<{ sender: 'user' | 'copilot'; text: string; id: string }>>([
     {
+      id: 'init-msg',
       sender: 'copilot',
-      text: 'Xin chào Chỉ huy! Tôi là Astro Copilot Gemini. Hãy ra lệnh bằng giọng nói hoặc gõ từ khóa (ví dụ: "lệnh: đổ xăng, giá tiền: 500k" hoặc "bảo dưỡng: thay nhớt 250k mốc 15000 km").',
+      text: 'Xin chào bạn! Tôi là Trợ lý Lái xe Veo AI. Hãy bấm micro để ra lệnh bằng giọng nói (ví dụ: "đổ xăng 500k", "thay nhớt máy 250k mốc 15000 km") hoặc trò chuyện hỏi đáp kỹ thuật trực tiếp bằng giọng nói!',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isChatLoading, setIsChatLoading] = useState(false);
 
-  const recognitionRef = useRef<any>(null);
-  const silenceTimerRef = useRef<any>(null);
-  const latestTranscriptRef = useRef<string>('');
+  // Voice Chat (STT & TTS) state inside AI Q&A
+  const [isChatListening, setIsChatListening] = useState(false);
+  const [chatTranscript, setChatTranscript] = useState('');
+  const [ttsEnabled, setTtsEnabled] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('soxe_tts') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  const [isSpeaking, setIsSpeaking] = useState(false);
 
-  // Local Copilot Knowledge Fallback for Client
+  const commandRecognitionRef = useRef<any>(null);
+  const chatRecognitionRef = useRef<any>(null);
+  const commandSilenceTimerRef = useRef<any>(null);
+  const chatSilenceTimerRef = useRef<any>(null);
+  const latestCommandTranscriptRef = useRef<string>('');
+  const latestChatTranscriptRef = useRef<string>('');
+
+  // Clean text from symbols before reading with TTS
+  const cleanForSpeech = (text: string): string => {
+    return text
+      .replace(/[#*_`~>]/g, '')
+      .replace(/\[.*?\]/g, '')
+      .replace(/\(.*?\)/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}]/gu, '')
+      .trim();
+  };
+
+  // Text-to-Speech function for AI responses
+  const speakText = (text: string) => {
+    if (!('speechSynthesis' in window)) return;
+    try {
+      window.speechSynthesis.cancel();
+      const cleaned = cleanForSpeech(text);
+      if (!cleaned) return;
+
+      const utterance = new SpeechSynthesisUtterance(cleaned);
+      utterance.lang = 'vi-VN';
+      utterance.rate = 1.02;
+      utterance.pitch = 1.0;
+
+      // Try finding a Vietnamese voice if available
+      const voices = window.speechSynthesis.getVoices();
+      const viVoice = voices.find((v) => v.lang.startsWith('vi') || v.lang.includes('VIE'));
+      if (viVoice) {
+        utterance.voice = viVoice;
+      }
+
+      utterance.onstart = () => setIsSpeaking(true);
+      utterance.onend = () => setIsSpeaking(false);
+      utterance.onerror = () => setIsSpeaking(false);
+
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      setIsSpeaking(false);
+    }
+  };
+
+  const stopSpeaking = () => {
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    setIsSpeaking(false);
+  };
+
+  const handleToggleTts = () => {
+    const next = !ttsEnabled;
+    setTtsEnabled(next);
+    if (!next) stopSpeaking();
+    try {
+      localStorage.setItem('soxe_tts', next ? '1' : '0');
+    } catch {}
+  };
+
+  // Local Copilot Knowledge Fallback for Client (instant, realistic automotive advice)
   const getClientFallbackAdvice = (msg: string): string => {
     const lower = msg.toLowerCase();
-    const vName = currentVehicle?.name || 'phương tiện';
+    const vName = currentVehicle?.name || 'xe của bạn';
     const odo = currentOdo || 0;
 
     if (lower.includes('nhớt') || lower.includes('dầu')) {
       return `🛢️ [Tư vấn nhớt ${vName}]:
-- Xe máy: Thay sau mỗi 1.500 - 2.000 km (nhớt khoáng) hoặc 3.000 - 4.000 km (nhớt 100% tổng hợp).
-- Ô tô: Thay sau mỗi 5.000 - 10.000 km. Luôn thay lọc nhớt sau mỗi 2 lần thay nhớt máy.
+- Xe máy: Thay sau mỗi 1.500 - 2.000 km (nhớt khoáng/bán tổng hợp) hoặc 3.000 - 4.000 km (nhớt 100% tổng hợp cao cấp).
+- Ô tô: Thay sau mỗi 5.000 km (nhớt thông thường) hoặc 10.000 km (nhớt tổng hợp toàn phần). Nên thay lọc nhớt sau mỗi 2 lần thay dầu máy.
 - Mốc km hiện tại của bạn: ${odo.toLocaleString('vi-VN')} km.`;
     }
     if (lower.includes('xăng') || lower.includes('tiết kiệm') || lower.includes('tiêu hao')) {
-      return `⛽ [Mức tiêu hao & Tiết kiệm nhiên liệu]:
-- Duy trì tay ga/chân ga đều đặn, tránh tăng tốc đột ngột.
-- Kiểm tra áp suất lốp đủ chuẩn (lốp non làm tốn thêm 5-10% xăng).
-- Vệ sinh lọc gió định kỳ mỗi 5.000 km.`;
+      return `⛽ [Mức tiêu hao & Mẹo tiết kiệm xăng cho ${vName}]:
+- Duy trì tay ga/chân ga đều đặn ở dải tốc độ kinh tế 40 - 70 km/h.
+- Đảm bảo áp suất lốp đủ chuẩn (lốp non làm tăng 5-10% hao xăng).
+- Vệ sinh lọc gió định kỳ mỗi 5.000 km và thay mới ở mốc 15.000 - 20.000 km.
+- Đổ xăng vào buổi sáng sớm hoặc chiều mát khi nhiệt độ thấp, xăng đặc và ít bay hơi.`;
     }
     if (lower.includes('lốp') || lower.includes('áp suất')) {
-      return `🛞 [Tư vấn áp suất lốp]:
+      return `🛞 [Tư vấn áp suất lốp xe]:
 - Xe máy: Bánh trước ~2.0 kg/cm² (29 PSI), bánh sau ~2.3 kg/cm² (33 PSI).
-- Ô tô: Thường 2.2 - 2.5 bar (32 - 36 PSI). Nên đảo lốp mỗi 10.000 km.`;
+- Ô tô: Thường từ 2.2 - 2.5 bar (31 - 36 PSI). Nên đảo lốp mỗi 10.000 km và thay lốp sau 40.000 - 50.000 km.`;
     }
-    return `🛸 [Astro Copilot - Trợ lý xe ${vName}]:
-Tôi đã ghi nhận câu hỏi của bạn. Xe đang ở mốc Odo: ${odo.toLocaleString('vi-VN')} km.
-Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/bugi, kinh nghiệm chạy tiết kiệm xăng hoặc ra lệnh giọng nói: "lệnh: đổ xăng, giá tiền: 500k".`;
+    if (lower.includes('bugi') || lower.includes('đánh lửa')) {
+      return `⚡ [Bảo dưỡng Bugi]:
+- Kiểm tra vệ sinh mỗi 8.000 km và thay mới ở mốc 12.000 - 15.000 km (bugi tiêu chuẩn).
+- Bugi Iridium cao cấp có thể chạy 30.000 - 50.000 km mới cần thay.`;
+    }
+    if (lower.includes('phanh') || lower.includes('thắng')) {
+      return `🛑 [Hệ thống phanh]:
+- Kiểm tra độ mòn má phanh định kỳ mỗi 5.000 km.
+- Thay dầu phanh (DOT 3 / DOT 4) sau mỗi 2 năm hoặc 20.000 km để đảm bảo áp suất thủy lực an toàn.`;
+    }
+    return `🚗 [Trợ lý Lái Xe Veo Copilot - Xe ${vName}]:
+Tôi đã ghi nhận câu hỏi của bạn. Phương tiện "${vName}" hiện đang ở mốc Odo: ${odo.toLocaleString('vi-VN')} km.
+Bạn có thể hỏi tôi về:
+1. Mẹo tiết kiệm xăng & mức tiêu hao thực tế.
+2. Chu kỳ thay nhớt máy, nhớt hộp số, lọc gió, bugi, má phanh.
+3. Ra lệnh giọng nói tự động điền: "lệnh: đổ xăng, giá tiền 500k" hoặc "thay nhớt 250k".`;
   };
 
   const processTextCommand = async (rawText: string) => {
@@ -68,7 +158,7 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
     if (!text) return;
 
     setIsProcessing(true);
-    setStatusMessage('⚡ Astro Copilot đang giải mã dữ liệu câu lệnh...');
+    setStatusMessage('⚡ Veo Copilot đang phân tích câu lệnh...');
 
     // 1. Fast offline keyword check first
     const fastParsed = parseVoiceKeywordCommand(text, currentOdo);
@@ -79,7 +169,7 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
       onApplyCommand(fastParsed);
       setCommandInput('');
       setTranscript('');
-      latestTranscriptRef.current = '';
+      latestCommandTranscriptRef.current = '';
       return;
     }
 
@@ -92,11 +182,11 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
       );
       if (geminiParsed && (geminiParsed.amount > 0 || geminiParsed.note)) {
         playConfirmSound(soundEnabled);
-        setStatusMessage(`🤖 Đã tự động nạp: ${geminiParsed.explanation || 'Đã áp dụng vào form!'}`);
+        setStatusMessage(`🚗 Đã tự động điền: ${geminiParsed.explanation || 'Đã áp dụng vào form!'}`);
         onApplyCommand(geminiParsed);
         setCommandInput('');
         setTranscript('');
-        latestTranscriptRef.current = '';
+        latestCommandTranscriptRef.current = '';
       } else {
         setStatusMessage(
           'Chưa rõ số tiền. Hãy nói rõ: "lệnh: đổ xăng, giá tiền: 500k" hoặc "thay nhớt 250k".'
@@ -115,12 +205,12 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
     }
   };
 
+  // Setup Command Voice Recognition
   useEffect(() => {
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (SpeechRecognition) {
       const recognition = new SpeechRecognition();
-      // Continuous = true so it does NOT cut off abruptly while user is speaking
       recognition.continuous = true;
       recognition.interimResults = true;
       recognition.lang = 'vi-VN';
@@ -147,22 +237,21 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
         const combinedText = (finalText + interimText).trim();
         setTranscript(combinedText);
         setCommandInput(combinedText);
-        latestTranscriptRef.current = combinedText;
+        latestCommandTranscriptRef.current = combinedText;
 
-        // Reset silence debounce timer: wait 1.8 seconds after user stops speaking to auto-submit
-        if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-        silenceTimerRef.current = setTimeout(() => {
-          if (latestTranscriptRef.current.trim()) {
+        if (commandSilenceTimerRef.current) clearTimeout(commandSilenceTimerRef.current);
+        commandSilenceTimerRef.current = setTimeout(() => {
+          if (latestCommandTranscriptRef.current.trim()) {
             setStatusMessage('⚡ Đã nhận diện xong câu nói, đang tự động điền...');
-            if (recognitionRef.current) {
+            if (commandRecognitionRef.current) {
               try {
-                recognitionRef.current.stop();
+                commandRecognitionRef.current.stop();
               } catch {}
             }
             setIsListening(false);
-            processTextCommand(latestTranscriptRef.current);
+            processTextCommand(latestCommandTranscriptRef.current);
           }
-        }, 1800);
+        }, 1600);
       };
 
       recognition.onerror = (event: any) => {
@@ -177,51 +266,150 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
         setIsListening(false);
       };
 
-      recognitionRef.current = recognition;
+      commandRecognitionRef.current = recognition;
     }
 
     return () => {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
+      if (commandSilenceTimerRef.current) clearTimeout(commandSilenceTimerRef.current);
     };
   }, [soundEnabled, currentOdo, currentVehicle?.name]);
 
-  const handleToggleMic = () => {
-    if (!recognitionRef.current) {
+  // Setup AI Chat Voice Recognition
+  useEffect(() => {
+    const SpeechRecognition =
+      (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (SpeechRecognition) {
+      const chatRec = new SpeechRecognition();
+      chatRec.continuous = true;
+      chatRec.interimResults = true;
+      chatRec.lang = 'vi-VN';
+
+      chatRec.onstart = () => {
+        setIsChatListening(true);
+        stopSpeaking();
+        playChimeSound(soundEnabled);
+      };
+
+      chatRec.onresult = (event: any) => {
+        let interimText = '';
+        let finalText = '';
+
+        for (let i = 0; i < event.results.length; i++) {
+          const res = event.results[i];
+          if (res.isFinal) {
+            finalText += res[0].transcript + ' ';
+          } else {
+            interimText += res[0].transcript;
+          }
+        }
+
+        const combinedText = (finalText + interimText).trim();
+        setChatTranscript(combinedText);
+        setChatInput(combinedText);
+        latestChatTranscriptRef.current = combinedText;
+
+        // Auto-send when silence detected in chat mode
+        if (chatSilenceTimerRef.current) clearTimeout(chatSilenceTimerRef.current);
+        chatSilenceTimerRef.current = setTimeout(() => {
+          if (latestChatTranscriptRef.current.trim()) {
+            if (chatRecognitionRef.current) {
+              try {
+                chatRecognitionRef.current.stop();
+              } catch {}
+            }
+            setIsChatListening(false);
+            executeChatQuery(latestChatTranscriptRef.current);
+          }
+        }, 1700);
+      };
+
+      chatRec.onerror = (event: any) => {
+        if (event?.error !== 'no-speech') {
+          setIsChatListening(false);
+        }
+      };
+
+      chatRec.onend = () => {
+        setIsChatListening(false);
+      };
+
+      chatRecognitionRef.current = chatRec;
+    }
+
+    return () => {
+      if (chatSilenceTimerRef.current) clearTimeout(chatSilenceTimerRef.current);
+    };
+  }, [soundEnabled, currentOdo, currentVehicle]);
+
+  const handleToggleCommandMic = () => {
+    if (!commandRecognitionRef.current) {
       setStatusMessage('Trình duyệt chưa hỗ trợ Web Speech API. Bạn có thể gõ trực tiếp câu lệnh.');
       return;
     }
 
     if (isListening) {
-      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current);
-      recognitionRef.current.stop();
+      if (commandSilenceTimerRef.current) clearTimeout(commandSilenceTimerRef.current);
+      commandRecognitionRef.current.stop();
       setIsListening(false);
-      if (latestTranscriptRef.current.trim()) {
-        processTextCommand(latestTranscriptRef.current);
+      if (latestCommandTranscriptRef.current.trim()) {
+        processTextCommand(latestCommandTranscriptRef.current);
       }
     } else {
       setTranscript('');
-      latestTranscriptRef.current = '';
+      latestCommandTranscriptRef.current = '';
       setStatusMessage('Đang kích hoạt micro... Hãy đọc đủ thông tin (ví dụ: "lệnh: đổ xăng, giá tiền: 500k")');
       try {
-        recognitionRef.current.start();
+        commandRecognitionRef.current.start();
       } catch {
-        recognitionRef.current.stop();
+        commandRecognitionRef.current.stop();
         setTimeout(() => {
           try {
-            recognitionRef.current.start();
+            commandRecognitionRef.current.start();
           } catch {}
         }, 200);
       }
     }
   };
 
-  const handleSendChat = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!chatInput.trim() || isChatLoading) return;
+  const handleToggleChatMic = () => {
+    if (!chatRecognitionRef.current) {
+      alert('Trình duyệt của bạn chưa bật nhận diện giọng nói Web Speech.');
+      return;
+    }
 
-    const userText = chatInput.trim();
+    if (isChatListening) {
+      if (chatSilenceTimerRef.current) clearTimeout(chatSilenceTimerRef.current);
+      chatRecognitionRef.current.stop();
+      setIsChatListening(false);
+      if (latestChatTranscriptRef.current.trim()) {
+        executeChatQuery(latestChatTranscriptRef.current);
+      }
+    } else {
+      stopSpeaking();
+      setChatTranscript('');
+      latestChatTranscriptRef.current = '';
+      try {
+        chatRecognitionRef.current.start();
+      } catch {
+        chatRecognitionRef.current.stop();
+        setTimeout(() => {
+          try {
+            chatRecognitionRef.current.start();
+          } catch {}
+        }, 200);
+      }
+    }
+  };
+
+  const executeChatQuery = async (queryText: string) => {
+    const userText = queryText.trim();
+    if (!userText || isChatLoading) return;
+
     setChatInput('');
-    setAiMessages((prev) => [...prev, { sender: 'user', text: userText }]);
+    setChatTranscript('');
+    latestChatTranscriptRef.current = '';
+    const userMsgId = 'u-' + Date.now();
+    setAiMessages((prev) => [...prev, { id: userMsgId, sender: 'user', text: userText }]);
     setIsChatLoading(true);
 
     try {
@@ -241,26 +429,36 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
       });
 
       const data = await res.json();
-      if (data && data.reply) {
-        setAiMessages((prev) => [...prev, { sender: 'copilot', text: data.reply }]);
-      } else {
-        const fallback = getClientFallbackAdvice(userText);
-        setAiMessages((prev) => [...prev, { sender: 'copilot', text: fallback }]);
+      const replyText = data && data.reply ? data.reply : getClientFallbackAdvice(userText);
+      const aiMsgId = 'ai-' + Date.now();
+      setAiMessages((prev) => [...prev, { id: aiMsgId, sender: 'copilot', text: replyText }]);
+
+      if (ttsEnabled) {
+        speakText(replyText);
       }
     } catch {
       const fallback = getClientFallbackAdvice(userText);
-      setAiMessages((prev) => [...prev, { sender: 'copilot', text: fallback }]);
+      const aiMsgId = 'ai-' + Date.now();
+      setAiMessages((prev) => [...prev, { id: aiMsgId, sender: 'copilot', text: fallback }]);
+      if (ttsEnabled) {
+        speakText(fallback);
+      }
     } finally {
       setIsChatLoading(false);
     }
+  };
+
+  const handleSendChatForm = (e: React.FormEvent) => {
+    e.preventDefault();
+    executeChatQuery(chatInput);
   };
 
   return (
     <div
       className="card"
       style={{
-        background: 'linear-gradient(145deg, rgba(8, 20, 48, 0.92), rgba(112, 0, 255, 0.12))',
-        borderColor: isListening ? '#00f0ff' : 'rgba(0, 240, 255, 0.35)',
+        background: 'linear-gradient(145deg, rgba(10, 18, 36, 0.94), rgba(14, 165, 233, 0.08))',
+        borderColor: isListening ? '#00f0ff' : 'rgba(0, 240, 255, 0.3)',
         boxShadow: isListening
           ? '0 0 25px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(0, 240, 255, 0.1)'
           : undefined,
@@ -269,10 +467,10 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
     >
       <div className="row" style={{ justifyContent: 'space-between', marginBottom: '8px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <span style={{ fontSize: '18px' }}>🛸</span>
+          <span style={{ fontSize: '18px' }}>🚗</span>
           <div>
             <h2 style={{ margin: 0, fontSize: '14.5px', color: '#00f0ff' }}>
-              Astro Copilot · AI & Radar Giọng Nói
+              Trợ Lý Xe Ô Tô AI · Giọng Nói Hai Chiều
             </h2>
             <small style={{ color: 'var(--mut)', fontSize: '11px' }}>
               Tự động lắng nghe & Tự động điền form khi dứt câu (không cần bấm nạp)
@@ -282,23 +480,28 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
 
         <button
           type="button"
-          onClick={() => setAiChatOpen((prev) => !prev)}
+          onClick={() => {
+            setAiChatOpen((prev) => !prev);
+            stopSpeaking();
+          }}
           style={{
             fontSize: '12px',
-            padding: '5px 10px',
-            background: 'rgba(0, 240, 255, 0.12)',
-            borderColor: 'rgba(0, 240, 255, 0.3)',
+            padding: '5px 11px',
+            background: aiChatOpen ? 'rgba(0, 240, 255, 0.25)' : 'rgba(0, 240, 255, 0.12)',
+            borderColor: 'rgba(0, 240, 255, 0.35)',
+            color: '#e0f2fe',
+            fontWeight: 600,
           }}
         >
-          💬 Hỏi đáp AI
+          💬 {aiChatOpen ? 'Đóng hỏi đáp' : 'Hỏi đáp AI bằng Giọng nói'}
         </button>
       </div>
 
-      {/* Voice Control Bar (Automatic fill on sentence end, no manual Nap button needed) */}
+      {/* Voice Quick Command Bar */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
         <button
           type="button"
-          onClick={handleToggleMic}
+          onClick={handleToggleCommandMic}
           title={isListening ? 'Bấm để dừng và điền ngay' : 'Bật micro ra lệnh giọng nói'}
           style={{
             width: '46px',
@@ -307,8 +510,8 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
             padding: 0,
             flexShrink: 0,
             background: isListening
-              ? 'radial-gradient(circle, #ff0055 30%, #7000ff 100%)'
-              : 'radial-gradient(circle, #00f0ff 20%, #0066ff 100%)',
+              ? 'radial-gradient(circle, #ff0055 30%, #b91c1c 100%)'
+              : 'radial-gradient(circle, #00f0ff 20%, #0284c7 100%)',
             borderColor: isListening ? '#ff3366' : '#00f0ff',
             boxShadow: isListening
               ? '0 0 22px #ff0055'
@@ -329,7 +532,7 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
             value={commandInput}
             onChange={(e) => {
               setCommandInput(e.target.value);
-              latestTranscriptRef.current = e.target.value;
+              latestCommandTranscriptRef.current = e.target.value;
             }}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
@@ -372,7 +575,7 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
             <span />
           </div>
           <span style={{ fontSize: '12.5px', color: '#00f0ff', fontStyle: 'italic' }}>
-            {transcript || 'Nói: "lệnh: đổ xăng, giá tiền 500k" hoặc "bảo dưỡng bugi 80k"...'}
+            {transcript || 'Nói tự nhiên: "lệnh: đổ xăng 500k ron95" hoặc "bảo dưỡng bugi 120k"...'}
           </span>
         </div>
       )}
@@ -401,9 +604,9 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
         {[
           'lệnh: đổ xăng, giá tiền: 500k',
           'bảo dưỡng thay nhớt 250k',
-          'lệnh: đổ xăng 300k ron95',
-          'bảo dưỡng bugi và lọc gió 200k',
-          'thu nhập grab 450k',
+          'đổ xăng 400k ron95',
+          'rửa xe bọt tuyết 80k',
+          'thu nhập chạy xe 450k',
         ].map((cmd) => (
           <button
             key={cmd}
@@ -426,7 +629,7 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
         ))}
       </div>
 
-      {/* AI Chat Modal Dialog */}
+      {/* Two-Way AI Voice & Text Chat Panel */}
       {aiChatOpen && (
         <div
           style={{
@@ -435,9 +638,65 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
             borderTop: '1px solid rgba(0, 240, 255, 0.2)',
           }}
         >
+          {/* Voice Chat Controls Header */}
           <div
             style={{
-              maxHeight: '180px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              marginBottom: '10px',
+              padding: '4px 8px',
+              borderRadius: '8px',
+              background: 'rgba(5, 12, 28, 0.7)',
+              fontSize: '12px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <span style={{ color: '#00f0ff', fontWeight: 700 }}>🎙️ Trò chuyện Giọng Nói 2 Chiều</span>
+              {isSpeaking && (
+                <span style={{ color: '#00ff88', display: 'flex', alignItems: 'center', gap: '4px' }}>
+                  <span className="dot" style={{ background: '#00ff88' }} /> Đang nói...
+                </span>
+              )}
+            </div>
+
+            <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              {isSpeaking && (
+                <button
+                  type="button"
+                  onClick={stopSpeaking}
+                  style={{
+                    padding: '2px 8px',
+                    fontSize: '11px',
+                    background: 'rgba(255, 51, 102, 0.2)',
+                    borderColor: '#ff3366',
+                    color: '#ff6688',
+                  }}
+                >
+                  ⏹️ Dừng đọc
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={handleToggleTts}
+                title={ttsEnabled ? 'Tắt tính năng AI đọc câu trả lời' : 'Bật tính năng AI đọc câu trả lời'}
+                style={{
+                  padding: '2px 8px',
+                  fontSize: '11px',
+                  background: ttsEnabled ? 'rgba(0, 255, 136, 0.15)' : 'rgba(255, 255, 255, 0.05)',
+                  borderColor: ttsEnabled ? '#00ff88' : 'rgba(255, 255, 255, 0.2)',
+                  color: ttsEnabled ? '#00ff88' : 'var(--mut)',
+                }}
+              >
+                {ttsEnabled ? '🔊 Đọc to: Bật' : '🔇 Đọc to: Tắt'}
+              </button>
+            </div>
+          </div>
+
+          {/* Chat Messages Log */}
+          <div
+            style={{
+              maxHeight: '220px',
               overflowY: 'auto',
               display: 'flex',
               flexDirection: 'column',
@@ -446,41 +705,117 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
               paddingRight: '4px',
             }}
           >
-            {aiMessages.map((m, idx) => (
+            {aiMessages.map((m) => (
               <div
-                key={idx}
+                key={m.id}
                 style={{
                   alignSelf: m.sender === 'user' ? 'flex-end' : 'flex-start',
-                  maxWidth: '85%',
-                  padding: '7px 11px',
-                  borderRadius: '10px',
+                  maxWidth: '88%',
+                  padding: '8px 12px',
+                  borderRadius: '12px',
                   fontSize: '12.5px',
+                  lineHeight: '1.5',
                   background:
                     m.sender === 'user'
-                      ? 'linear-gradient(135deg, #00f0ff 0%, #0088ff 100%)'
-                      : 'rgba(10, 25, 55, 0.9)',
-                  color: m.sender === 'user' ? '#03121f' : '#e2f1ff',
+                      ? 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)'
+                      : 'rgba(12, 22, 42, 0.95)',
+                  color: m.sender === 'user' ? '#ffffff' : '#e2f1ff',
                   border: m.sender === 'copilot' ? '1px solid rgba(0, 240, 255, 0.25)' : 'none',
                 }}
               >
-                <b>{m.sender === 'user' ? 'Bạn' : 'Astro Copilot'}:</b> {m.text}
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '3px' }}>
+                  <b>{m.sender === 'user' ? 'Bạn' : '🚗 Trợ lý Lái Xe'}:</b>
+                  {m.sender === 'copilot' && (
+                    <button
+                      type="button"
+                      onClick={() => speakText(m.text)}
+                      title="Đọc lại câu trả lời"
+                      style={{
+                        padding: '1px 5px',
+                        fontSize: '10px',
+                        background: 'none',
+                        border: 'none',
+                        color: '#00f0ff',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      🔊 Đọc lại
+                    </button>
+                  )}
+                </div>
+                <div style={{ whiteSpace: 'pre-line' }}>{m.text}</div>
               </div>
             ))}
+
             {isChatLoading && (
-              <div style={{ color: '#00f0ff', fontSize: '12px', fontStyle: 'italic' }}>
-                Astro Copilot đang kết nối vệ tinh phân tích...
+              <div style={{ color: '#00f0ff', fontSize: '12px', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <span className="dot" style={{ background: '#00f0ff' }} /> Trợ lý AI đang tra cứu kỹ thuật xe và phân tích...
               </div>
             )}
           </div>
 
-          <form onSubmit={handleSendChat} style={{ display: 'flex', gap: '6px' }}>
+          {/* Active Chat Voice Listening Wave */}
+          {isChatListening && (
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                padding: '6px 10px',
+                marginBottom: '8px',
+                borderRadius: '8px',
+                background: 'rgba(0, 240, 255, 0.1)',
+                border: '1px solid #00f0ff',
+              }}
+            >
+              <div className="voice-wave">
+                <span />
+                <span />
+                <span />
+                <span />
+                <span />
+              </div>
+              <span style={{ fontSize: '12px', color: '#00f0ff' }}>
+                {chatTranscript || 'Đang lắng nghe câu hỏi của bạn... Khi bạn dừng nói, AI sẽ tự động trả lời!'}
+              </span>
+            </div>
+          )}
+
+          {/* Chat Form with Dedicated Voice Input Button */}
+          <form onSubmit={handleSendChatForm} style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+            <button
+              type="button"
+              onClick={handleToggleChatMic}
+              title={isChatListening ? 'Dừng nói và gửi ngay' : 'Bấm để nói câu hỏi bằng giọng nói'}
+              style={{
+                width: '38px',
+                height: '38px',
+                borderRadius: '50%',
+                padding: 0,
+                flexShrink: 0,
+                background: isChatListening
+                  ? 'radial-gradient(circle, #ff0055 30%, #b91c1c 100%)'
+                  : 'radial-gradient(circle, #00f0ff 20%, #0284c7 100%)',
+                borderColor: isChatListening ? '#ff3366' : '#00f0ff',
+                color: '#fff',
+                fontSize: '16px',
+                boxShadow: isChatListening ? '0 0 16px #ff0055' : '0 0 10px rgba(0, 240, 255, 0.5)',
+              }}
+            >
+              {isChatListening ? '⏹️' : '🎙️'}
+            </button>
+
             <input
               type="text"
-              placeholder="Hỏi về mức tiêu hao, nhớt máy, kinh nghiệm lái..."
+              placeholder="Nói hoặc gõ hỏi về mức tiêu hao, nhớt máy, kinh nghiệm lái..."
               value={chatInput}
-              onChange={(e) => setChatInput(e.target.value)}
+              onChange={(e) => {
+                setChatInput(e.target.value);
+                latestChatTranscriptRef.current = e.target.value;
+              }}
               style={{ flex: 1, padding: '7px 10px', fontSize: '12.5px' }}
             />
+
             <button type="submit" className="pri" disabled={isChatLoading || !chatInput.trim()}>
               Gửi
             </button>
@@ -490,3 +825,4 @@ Bạn có thể hỏi tôi về định kỳ thay nhớt, kiểm tra lọc gió/
     </div>
   );
 };
+export default AstroCopilot;

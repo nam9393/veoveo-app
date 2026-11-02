@@ -1,6 +1,6 @@
 {
   "name": "Veo App - Lái mượt, Quản lý chuẩn",
-  "description": "Ứng dụng buồng lái không gian quản lý phương tiện thông minh, tích hợp AI Copilot Gemini và trợ lý giọng nói điều khiển đa tác vụ.",
+  "description": "Ứng dụng taplo theo dõi và quản lý xe thực tế trực quan, tích hợp AI Trợ lý lái xe thông minh và điều khiển giọng nói hai chiều.",
   "majorCapabilities": [
     "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
   ]

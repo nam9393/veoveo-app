@@ -84,9 +84,9 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
   };
 
   return (
-    <details className="card fold">
+    <details className="card fold" open>
       <summary>
-        <h2>🎨 Giao diện nền</h2>
+        <h2>🎨 Giao diện nền taplo & xe thực tế</h2>
       </summary>
 
       <div id="bgs" className="mgrid">

@@ -76,13 +76,13 @@ function getLocalCopilotAdvice(message: string, context: any): string {
 - Mốc 15.000 - 20.000 km: Thay lọc gió, thay bugi, thay dầu phanh, vệ sinh buồng đốt / kim phun xăng điện tử (FI).`;
   }
 
-  return `🛸 [Astro Copilot - Trợ lý xe ${vName}]:
+  return `🚗 [Trợ lý Lái Xe Veo Copilot - Xe ${vName}]:
 Tôi đã ghi nhận câu hỏi của bạn. Phương tiện "${vName}" hiện đang ghi nhận Odo: ${odo.toLocaleString('vi-VN')} km.
 Bạn có thể hỏi tôi bất kỳ điều gì về:
 1. Mức tiêu hao xăng thực tế & kinh nghiệm lái tiết kiệm.
 2. Mốc thay nhớt máy, nhớt số, lọc gió, bugi, má phanh.
 3. Hướng dẫn ra lệnh bằng giọng nói: "lệnh: đổ xăng, giá tiền: 500k" hoặc "thay nhớt 250k".
-Copilot luôn sẵn sàng đồng hành cùng bạn trên mọi nẻo đường!`;
+Copilot luôn sẵn sàng đồng hành cùng bạn trên mọi cung đường!`;
 }
 
 // Endpoint: Parse voice or text command into structured Vehicle Log Entry
@@ -94,7 +94,7 @@ app.post('/api/gemini/parse-command', async (req, res) => {
       return;
     }
 
-    const prompt = `Phân tích câu lệnh hoặc giọng nói sau từ người dùng để điền tự động vào sổ theo dõi xe:
+    const prompt = `Phân tích câu lệnh hoặc giọng nói sau từ người dùng để điền tự động vào sổ theo dõi xe thực tế:
 "${text}"
 Thông tin xe hiện tại: Tên xe "${vehicleName || 'Phương tiện'}", Số Odometer hiện tại: ${currentOdo || 0} km.
 
@@ -108,14 +108,14 @@ Hãy xác định các trường:
 - full: boolean, true nếu người dùng nói "đầy bình", "tràn bình", "full bình". Mặc định true cho đổ xăng nếu không nói rõ.
 - ft: loại xăng nếu có nhắc đến ('e10', 'e5', 'ron95', hoặc 'other').
 - partName: tên phụ tùng nếu thuộc bảo dưỡng (ví dụ: 'Nhớt máy', 'Bugi', 'Lọc gió', 'Má phanh', 'Lốp').
-- explanation: câu phản hồi xác nhận ngắn gọn thân thiện, phong cách trợ lý không gian (tối đa 25 từ).`;
+- explanation: câu phản hồi xác nhận ngắn gọn thân thiện, phong cách trợ lý lái xe ô tô thông minh (tối đa 25 từ).`;
 
     const response = await ai.models.generateContent({
       model: 'gemini-3.8-flash',
       contents: prompt,
       config: {
         systemInstruction:
-          'Bạn là Astro Copilot - Trợ lý không gian thông minh của Veo App. Bạn chuyên phân tích các câu lệnh giọng nói và văn bản tiếng Việt để tự động điền form đổ xăng, bảo dưỡng và chi phí xe.',
+          'Bạn là Veo Copilot - Trợ lý lái xe ô tô thông minh của Veo App. Bạn chuyên phân tích các câu lệnh giọng nói và văn bản tiếng Việt để tự động điền form đổ xăng, bảo dưỡng và chi phí xe.',
         responseMimeType: 'application/json',
         responseSchema: {
           type: Type.OBJECT,
@@ -158,7 +158,7 @@ Hãy xác định các trường:
             },
             explanation: {
               type: Type.STRING,
-              description: 'Astro Copilot brief confirmation message',
+              description: 'Veo Copilot brief confirmation message',
             },
           },
           required: ['type', 'amount', 'explanation'],
@@ -184,9 +184,9 @@ app.post('/api/gemini/chat', async (req, res) => {
     }
 
     const contextStr = context ? JSON.stringify(context) : 'Chưa có thông tin xe.';
-    const prompt = `Bạn là Astro Copilot - Trợ lý AI phi thuyền không gian thông minh của Veo App.
-Hãy trò chuyện, tư vấn kỹ thuật, chăm sóc xe, tiết kiệm nhiên liệu, nhắc bảo dưỡng hoặc giải đáp thắc mắc của người lái.
-Giọng điệu: Hiện đại, chuyên nghiệp, phong cách không gian/viễn tưởng nhẹ nhàng, thân thiện, tiếng Việt tự nhiên và súc tích.
+    const prompt = `Bạn là Trợ lý lái xe thông minh Veo Copilot của ứng dụng Veo App.
+Hãy trò chuyện, tư vấn kỹ thuật xe ô tô/xe máy, kinh nghiệm lái xe thực tế, mẹo tiết kiệm nhiên liệu, nhắc bảo dưỡng phụ tùng định kỳ hoặc giải đáp thắc mắc của chủ xe.
+Giọng điệu: Thân thiện, thực tế, chuyên nghiệp, ngôn ngữ tiếng Việt tự nhiên và súc tích. Tuyệt đối không nhắc tới phi thuyền, không gian hay viễn tưởng.
 
 Dữ liệu phương tiện và thông số hiện tại:
 ${contextStr}
@@ -199,7 +199,7 @@ Yêu cầu người dùng:
       contents: prompt,
     });
 
-    res.json({ success: true, reply: response.text || 'Không có phản hồi từ Astro Copilot.' });
+    res.json({ success: true, reply: response.text || 'Không có phản hồi từ Veo Copilot.' });
   } catch (error: any) {
     console.warn('Gemini chat warning (using intelligent local fallback):', error?.message);
     const { message, context } = req.body;
@@ -225,13 +225,13 @@ async function startServer() {
     app.use(vite.middlewares);
   } else {
     app.use(express.static(path.resolve(__dirname, 'dist')));
-    app.get('*', (_req, res) => {
+    app.use((_req, res) => {
       res.sendFile(path.resolve(__dirname, 'dist', 'index.html'));
     });
   }
 
   app.listen(PORT, HOST, () => {
-    console.log(`🚀 Space Cockpit Veo App running on http://${HOST}:${PORT}`);
+    console.log(`🚗 Veo Automotive App running on http://${HOST}:${PORT}`);
   });
 }
 

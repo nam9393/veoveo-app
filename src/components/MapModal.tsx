@@ -105,7 +105,7 @@ export const MapModal: React.FC<MapModalProps> = ({
     if (!isOpen) return;
 
     if (navigator.geolocation) {
-      setStatusMsg('Đang lấy vị trí GPS từ vệ tinh Google Maps...');
+      setStatusMsg('Đang xác định vị trí GPS hiện tại của bạn...');
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
@@ -158,7 +158,7 @@ export const MapModal: React.FC<MapModalProps> = ({
       setStatusMsg('Trình duyệt không hỗ trợ Geolocation.');
       return;
     }
-    setStatusMsg('Đang quét vệ tinh định vị lại...');
+    setStatusMsg('Đang cập nhật vị trí GPS thiết bị...');
     navigator.geolocation.getCurrentPosition(
       (pos) => {
         const lat = pos.coords.latitude;

@@ -45,36 +45,30 @@ body {
   overflow-x: hidden;
 }
 
-/* Deep Space Starfield & Cosmic Nebula Background */
+/* Realistic Automotive Cockpit & Road Background Layer */
 body::before {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -3;
-  background: 
-    radial-gradient(circle at 15% 20%, rgba(112, 0, 255, 0.18) 0%, transparent 45%),
-    radial-gradient(circle at 85% 75%, rgba(0, 240, 255, 0.15) 0%, transparent 50%),
-    radial-gradient(circle at 50% 50%, rgba(191, 0, 255, 0.08) 0%, transparent 60%),
-    linear-gradient(180deg, #040711 0%, #080f24 50%, #030612 100%);
+  background-image: var(--bgimg, none);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  opacity: var(--bgop, 0.4);
+  transition: opacity 0.3s ease, background-image 0.3s ease;
+  pointer-events: none;
 }
 
+/* Subtle Automotive Windshield & Cockpit Vignette */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -2;
-  background-image: 
-    radial-gradient(1.5px 1.5px at 20px 30px, #ffffff 100%, transparent),
-    radial-gradient(1px 1px at 40px 70px, rgba(0, 240, 255, 0.8) 100%, transparent),
-    radial-gradient(1.5px 1.5px at 90px 40px, #ffffff 100%, transparent),
-    radial-gradient(2px 2px at 160px 120px, rgba(112, 0, 255, 0.9) 100%, transparent),
-    radial-gradient(1px 1px at 230px 190px, #ffffff 100%, transparent),
-    radial-gradient(1.5px 1.5px at 310px 80px, rgba(0, 255, 136, 0.8) 100%, transparent),
-    radial-gradient(2px 2px at 450px 220px, #ffffff 100%, transparent),
-    radial-gradient(1px 1px at 600px 150px, rgba(0, 240, 255, 0.9) 100%, transparent);
-  background-repeat: repeat;
-  background-size: 550px 350px;
-  opacity: 0.65;
+  background: 
+    radial-gradient(ellipse at 50% 35%, transparent 30%, rgba(5, 11, 22, 0.75) 100%),
+    linear-gradient(180deg, rgba(8, 15, 30, 0.25) 0%, rgba(4, 8, 16, 0.88) 100%);
   pointer-events: none;
 }
 
