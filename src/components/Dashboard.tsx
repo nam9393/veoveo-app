@@ -23,10 +23,64 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onNavigateTab,
 }) => {
   const [subModule, setSubModule] = useState<'overview' | 'fuel' | 'analysis'>('overview');
-  const [driveMode, setDriveMode] = useState<'ECO' | 'COMFORT' | 'SPORT'>('COMFORT');
-  const [acMode, setAcMode] = useState<'OFF' | 'ECO' | 'MAX'>('ECO');
+  
+  const [driveMode, setDriveModeState] = useState<'ECO' | 'COMFORT' | 'SPORT'>(() => {
+    try {
+      const saved = localStorage.getItem('soxe_drive_mode');
+      if (saved === 'ECO' || saved === 'COMFORT' || saved === 'SPORT') return saved;
+    } catch {}
+    return 'COMFORT';
+  });
+
+  const [acMode, setAcModeState] = useState<'OFF' | 'ECO' | 'MAX'>(() => {
+    try {
+      const saved = localStorage.getItem('soxe_ac_mode');
+      if (saved === 'OFF' || saved === 'ECO' || saved === 'MAX') return saved;
+    } catch {}
+    return 'ECO';
+  });
+
+  const setDriveMode = (m: 'ECO' | 'COMFORT' | 'SPORT') => {
+    setDriveModeState(m);
+    try {
+      localStorage.setItem('soxe_drive_mode', m);
+    } catch {}
+  };
+
+  const setAcMode = (m: 'OFF' | 'ECO' | 'MAX') => {
+    setAcModeState(m);
+    try {
+      localStorage.setItem('soxe_ac_mode', m);
+    } catch {}
+  };
+
   const [currentGear, setCurrentGear] = useState<'P' | 'R' | 'N' | 'D'>('D');
-  const [customTireValues, setCustomTireValues] = useState<Record<string, number> | null>(null);
+  const [customTireValues, setCustomTireValuesState] = useState<Record<string, number> | null>(() => {
+    try {
+      if (currentVehicle?.id) {
+        const saved = localStorage.getItem('soxe_tpms_' + currentVehicle.id);
+        if (saved) return JSON.parse(saved);
+      }
+    } catch {}
+    return null;
+  });
+
+  const setCustomTireValues = (updater: React.SetStateAction<Record<string, number> | null>) => {
+    setCustomTireValuesState((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      try {
+        if (currentVehicle?.id) {
+          if (next) {
+            localStorage.setItem('soxe_tpms_' + currentVehicle.id, JSON.stringify(next));
+          } else {
+            localStorage.removeItem('soxe_tpms_' + currentVehicle.id);
+          }
+        }
+      } catch {}
+      return next;
+    });
+  };
+
   const [tpmsToast, setTpmsToast] = useState<string>('');
 
   if (!currentVehicle) {

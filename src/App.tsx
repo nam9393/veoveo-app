@@ -21,11 +21,82 @@ import { AstroCopilot } from './components/AstroCopilot';
 import { PRESET_BACKGROUNDS, COCKPIT_THEMES } from './constants';
 import { ParsedCommand } from './utils/voiceParser';
 
+const starterVehicle: Vehicle = {
+  id: 'veh-demo-1',
+  name: 'Toyota Vios 1.5G',
+  brand: 'Toyota',
+  category: 'car',
+  plate: '30K-888.68',
+  tank: 42,
+  cons: 5.8,
+  odo: 12500,
+  u: 1,
+  currentTirePressures: {
+    front: 2.2,
+    rear: 2.2,
+    fl: 2.2,
+    fr: 2.2,
+    rl: 2.2,
+    rr: 2.2,
+  },
+};
+
+const starterEntries: Entry[] = [
+  {
+    id: 'ent-demo-1',
+    v: 'veh-demo-1',
+    date: new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10),
+    type: 'fuel',
+    odo: 12450,
+    amount: 850000,
+    liters: 36,
+    price: 23610,
+    full: true,
+    ft: 'ron95',
+    note: 'Đổ đầy xăng RON95 tại cây Petrolimex',
+    u: 1,
+  },
+  {
+    id: 'ent-demo-2',
+    v: 'veh-demo-1',
+    date: new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10),
+    type: 'service',
+    odo: 10000,
+    amount: 680000,
+    part: 'Nhớt máy',
+    note: 'Thay nhớt máy và kiểm tra định kỳ 10.000km',
+    u: 2,
+  },
+];
+
 const defaultAppState: AppState = {
-  vehicles: [],
-  entries: [],
-  parts: [],
-  cur: null,
+  vehicles: [starterVehicle],
+  entries: starterEntries,
+  parts: [
+    {
+      id: 'part-demo-1',
+      v: 'veh-demo-1',
+      name: 'Nhớt máy',
+      km: 5000,
+      mo: 6,
+      odo: 10000,
+      date: new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10),
+      pct: 50,
+      u: 1,
+    },
+    {
+      id: 'part-demo-2',
+      v: 'veh-demo-1',
+      name: 'Lọc gió động cơ',
+      km: 10000,
+      mo: 12,
+      odo: 10000,
+      date: new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10),
+      pct: 75,
+      u: 2,
+    },
+  ],
+  cur: 'veh-demo-1',
   tomb: {},
 };
 
@@ -35,13 +106,18 @@ export function App() {
       const r = localStorage.getItem('soxe_v1');
       if (r) {
         const p = JSON.parse(r);
-        if (p && p.vehicles && p.entries) {
+        if (p && Array.isArray(p.vehicles) && Array.isArray(p.entries)) {
+          // If user deleted the demo vehicle, respect tomb
+          const tomb = p.tomb || {};
+          if (p.vehicles.length === 0 && !tomb['veh-demo-1']) {
+            return defaultAppState;
+          }
           return {
-            vehicles: p.vehicles || [],
-            entries: p.entries || [],
+            vehicles: p.vehicles,
+            entries: p.entries,
             parts: p.parts || [],
             cur: p.cur || (p.vehicles[0] ? p.vehicles[0].id : null),
-            tomb: p.tomb || {},
+            tomb,
           };
         }
       }
@@ -59,14 +135,18 @@ export function App() {
   });
 
   const [bgConfig, setBgConfig] = useState<BackgroundConfig>(() => {
-    const def: BackgroundConfig = { mode: 'preset', id: 'luxury-cabin', data: '', op: 45 };
+    const def: BackgroundConfig = { mode: 'preset', id: 'luxury-cabin', data: '', op: 45, theme: 'bronze' };
     try {
       const b0 = JSON.parse(localStorage.getItem('soxe_bg') || 'null');
       if (b0 && b0.mode) {
         if (b0.mode === 'preset' && !PRESET_BACKGROUNDS.some((x) => x.id === b0.id)) {
           b0.id = 'luxury-cabin';
         }
-        return Object.assign(def, b0);
+        if (!b0.theme) {
+          const match = PRESET_BACKGROUNDS.find((x) => x.id === b0.id);
+          b0.theme = match?.theme || 'bronze';
+        }
+        return { ...def, ...b0 };
       }
     } catch {}
     return def;

@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
-    "build": "tsc && vite build && mkdir -p docs && cp -r dist/* docs/ && python3 package_zip.py",
+    "build": "tsc && vite build --base ./ && rm -rf docs && mkdir -p docs && cp -r dist/* docs/ && python3 package_zip.py",
     "pack": "python3 package_zip.py",
     "lint": "tsc --noEmit"
   },
@@ -28,7 +28,6 @@
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@vitejs/plugin-react": "^4.3.4",
-    "sharp": "^0.35.5",
     "tailwindcss": "^4.0.0",
     "tsx": "^4.23.15",
     "typescript": "^5.7.2",

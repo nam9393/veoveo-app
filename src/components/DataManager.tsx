@@ -217,27 +217,27 @@ export const DataManager: React.FC<DataManagerProps> = ({
           📊 Xuất Excel (.csv)
         </button>
         <a
-          href="/veoveo-app-source.zip"
+          href="./veoveo-app-source.zip"
           download="veoveo-app-source.zip"
           className="pri"
           style={{ textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: '5px' }}
         >
-          📦 Tải Mã Nguồn (.ZIP)
+          📦 Tải Toàn Bộ Mã Nguồn (.ZIP)
         </a>
         <a
-          href="/veoveo-app-web-dist.zip"
+          href="./veoveo-app-web-dist.zip"
           download="veoveo-app-web-dist.zip"
           style={{
             textDecoration: 'none',
             display: 'inline-flex',
             alignItems: 'center',
             gap: '5px',
-            background: 'rgba(0, 255, 136, 0.15)',
-            borderColor: '#00ff88',
-            color: '#00ff88',
+            background: 'rgba(245, 158, 11, 0.15)',
+            borderColor: 'var(--acc)',
+            color: 'var(--acc)',
           }}
         >
-          🚀 Tải Web Tĩnh (.ZIP)
+          🚀 Tải Bản Web Tĩnh Build Sẵn (.ZIP)
         </a>
         <button type="button" id="imp" onClick={() => fileInputRef.current?.click()}>
           📂 Mở file sao lưu…
@@ -301,35 +301,44 @@ export const DataManager: React.FC<DataManagerProps> = ({
       <div
         style={{
           marginTop: '16px',
-          padding: '12px',
-          borderRadius: '10px',
-          background: 'rgba(0, 240, 255, 0.08)',
-          border: '1px solid rgba(0, 240, 255, 0.25)',
+          padding: '14px',
+          borderRadius: '12px',
+          background: 'rgba(245, 158, 11, 0.06)',
+          border: '1px solid var(--line)',
         }}
       >
-        <h3 style={{ margin: '0 0 6px', fontSize: '13.5px', color: '#00f0ff' }}>
-          🌐 Địa chỉ Web & Cài đặt App (PWA)
+        <h3 style={{ margin: '0 0 8px', fontSize: '13.5px', color: 'var(--acc)' }}>
+          🛠️ Đồng bộ GitHub & Khắc phục lỗi dấu X đỏ (GitHub Pages)
         </h3>
-        <p style={{ margin: '0 0 8px', fontSize: '12.5px', color: '#cce6ff', lineHeight: 1.5 }}>
-          • <b>Link Web trực tiếp (có đầy đủ AI Gemini):</b> Mở trên trình duyệt điện thoại hoặc máy tính qua đường dẫn đã triển khai trên AI Studio:
-        </p>
-        <div
-          style={{
-            padding: '6px 10px',
-            background: 'rgba(5, 12, 28, 0.8)',
-            borderRadius: '6px',
-            fontSize: '12px',
-            fontFamily: 'monospace',
-            color: '#00f0ff',
-            wordBreak: 'break-all',
-            marginBottom: '8px',
-          }}
-        >
-          https://ais-pre-jlczx3v33qd2cngtlwrz75-22176439405.asia-northeast1.run.app
+        <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.6 }}>
+          <p style={{ margin: '0 0 8px' }}>
+            <b>Tại sao trước đó bị dấu X đỏ trên GitHub Actions?</b>
+            <br />
+            1. <b>Cài đặt Pages:</b> Trên GitHub repo, vào <b>Settings</b> ➔ <b>Pages</b> ➔ Tại mục <b>Source</b>, chọn <b>GitHub Actions</b> (thay vì <i>Deploy from a branch</i>).
+            <br />
+            2. <b>Quyền Actions:</b> Vào <b>Settings</b> ➔ <b>Actions</b> ➔ <b>General</b> ➔ kéo xuống <b>Workflow permissions</b>, chọn <b>Read and write permissions</b> rồi bấm Save.
+            <br />
+            3. <b>Nếu dùng Deploy from branch:</b> Bạn có thể chọn nhánh <code>main</code> và thư mục <code>/docs</code> (mã nguồn đã tự động build sẵn bản web hoàn chỉnh vào thư mục <code>docs/</code>).
+          </p>
+          <p style={{ margin: '0 0 6px' }}>
+            <b>⚡ Link trực tiếp chạy mượt mà kèm AI Gemini đầy đủ:</b>
+          </p>
+          <div
+            style={{
+              padding: '7px 10px',
+              background: 'rgba(10, 15, 25, 0.9)',
+              borderRadius: '6px',
+              fontSize: '11.5px',
+              fontFamily: 'monospace',
+              color: 'var(--acc)',
+              wordBreak: 'break-all',
+              border: '1px solid var(--line)',
+              marginBottom: '6px',
+            }}
+          >
+            https://ais-pre-jlczx3v33qd2cngtlwrz75-22176439405.asia-northeast1.run.app
+          </div>
         </div>
-        <p style={{ margin: 0, fontSize: '12px', color: 'var(--mut)' }}>
-          • <b>Vì sao link GitHub cũ không hiện gì?</b> GitHub Pages cần các file tĩnh đã build trong thư mục <code>dist/</code> thay vì mã nguồn TypeScript chưa build. Khi bạn đẩy thư mục <code>dist/</code> lên GitHub Pages, ứng dụng sẽ chạy ngay lập tức nhờ cấu hình <code>base: './'</code>!
-        </p>
       </div>
     </details>
   );

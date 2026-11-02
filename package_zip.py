@@ -9,7 +9,7 @@ os.makedirs(PUBLIC_DIR, exist_ok=True)
 SOURCE_ZIP = os.path.join(PUBLIC_DIR, 'veoveo-app-source.zip')
 WEB_ZIP = os.path.join(PUBLIC_DIR, 'veoveo-app-web-dist.zip')
 
-EXCLUDE_DIRS = {'node_modules', '.git', '.cache', 'coverage', '.aistudio'}
+EXCLUDE_DIRS = {'node_modules', '.git', '.cache', 'coverage', '.aistudio', 'docs'}
 EXCLUDE_EXTS = {'.zip', '.log'}
 
 # 1. Package Complete Source Code
@@ -36,7 +36,18 @@ if os.path.exists(DIST_DIR):
     with zipfile.ZipFile(WEB_ZIP, 'w', zipfile.ZIP_DEFLATED) as zf:
         for root, dirs, files in os.walk(DIST_DIR):
             for f in files:
+                if f.endswith('.zip'):
+                    continue
                 full_path = os.path.join(root, f)
                 rel_path = os.path.relpath(full_path, DIST_DIR)
                 zf.write(full_path, rel_path)
     print("Web dist package created successfully.")
+
+# Also sync packages into dist and docs
+for target in [os.path.join(ROOT_DIR, 'dist'), os.path.join(ROOT_DIR, 'docs')]:
+    if os.path.exists(target):
+        try:
+            shutil.copy2(SOURCE_ZIP, target)
+            shutil.copy2(WEB_ZIP, target)
+        except Exception:
+            pass

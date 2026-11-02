@@ -4,10 +4,10 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <title>Veo App - Lái mượt, Quản lý chuẩn</title>
-  <meta name="description" content="Ứng dụng buồng lái theo dõi xe thông minh tích hợp AI Copilot Gemini và trợ lý giọng nói điều khiển đa tác vụ.">
+  <meta name="description" content="Ứng dụng taplo theo dõi và quản lý xe thực tế trực quan, tích hợp AI Trợ lý lái xe thông minh và điều khiển giọng nói hai chiều.">
   <meta property="og:title" content="Veo App - Lái mượt, Quản lý chuẩn">
-  <meta property="og:description" content="Ứng dụng buồng lái theo dõi xe thông minh tích hợp AI Copilot Gemini và trợ lý giọng nói điều khiển đa tác vụ.">
-  <meta name="theme-color" content="#00f0ff">
+  <meta property="og:description" content="Ứng dụng taplo theo dõi và quản lý xe thực tế trực quan, tích hợp AI Trợ lý lái xe thông minh và điều khiển giọng nói hai chiều.">
+  <meta name="theme-color" content="#f59e0b">
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -19,15 +19,27 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script type="module" crossorigin src="./assets/index-BUhKzH45.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-CcytnBjR.css">
+  <script type="module" crossorigin src="./assets/index-DrQHzC0S.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DXUGjZ7I.css">
 </head>
 <body>
   <div id="root"></div>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
-        navigator.serviceWorker.register('sw.js').catch(() => {});
+        navigator.serviceWorker.register('sw.js').then((reg) => {
+          reg.update().catch(() => {});
+          reg.onupdatefound = () => {
+            const installing = reg.installing;
+            if (installing) {
+              installing.onstatechange = () => {
+                if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                  window.location.reload();
+                }
+              };
+            }
+          };
+        }).catch(() => {});
       });
     }
   </script>
