@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { AppState, BackgroundConfig, Entry, Part, Vehicle } from './types';
 import { calculateMedals, curOdoOf } from './utils/calc';
 import {
@@ -18,7 +18,7 @@ import { MedalsSection } from './components/MedalsSection';
 import { BackgroundCustomizer } from './components/BackgroundCustomizer';
 import { DataManager } from './components/DataManager';
 import { AstroCopilot } from './components/AstroCopilot';
-import { PRESET_BACKGROUNDS } from './constants';
+import { PRESET_BACKGROUNDS, COCKPIT_THEMES } from './constants';
 import { ParsedCommand } from './utils/voiceParser';
 
 const defaultAppState: AppState = {
@@ -88,25 +88,41 @@ export function App() {
   const stateRef = useRef(state);
   stateRef.current = state;
 
-  // Apply background
+  // Computed background image url
+  const bgImageUrl = useMemo(() => {
+    if (bgConfig.mode === 'none') return 'none';
+    if (bgConfig.mode === 'img' && bgConfig.data) {
+      return `url("${bgConfig.data}")`;
+    }
+    const p = PRESET_BACKGROUNDS.find((x) => x.id === bgConfig.id) || PRESET_BACKGROUNDS[0];
+    if (p) {
+      return `url("data:image/svg+xml,${encodeURIComponent(p.svg)}")`;
+    }
+    return 'none';
+  }, [bgConfig]);
+
+  // Apply background & theme colors
   useEffect(() => {
     const rootStyle = document.documentElement.style;
-    let url = 'none';
-    if (bgConfig.mode === 'img' && bgConfig.data) {
-      url = `url("${bgConfig.data}")`;
-    } else if (bgConfig.mode === 'preset') {
-      const p = PRESET_BACKGROUNDS.find((x) => x.id === bgConfig.id) || PRESET_BACKGROUNDS[0];
-      if (p) {
-        url = `url("data:image/svg+xml,${encodeURIComponent(p.svg)}")`;
-      }
-    }
-    rootStyle.setProperty('--bgimg', url);
-    rootStyle.setProperty('--bgop', url === 'none' ? '0' : String(bgConfig.op / 100));
+    rootStyle.setProperty('--bgimg', bgImageUrl);
+    rootStyle.setProperty('--bgop', bgConfig.mode === 'none' ? '0' : String(bgConfig.op / 100));
+
+    // Dynamic Theme selection
+    const preset = PRESET_BACKGROUNDS.find((x) => x.id === bgConfig.id);
+    const themeKey = bgConfig.theme || (preset?.theme as string) || 'amber';
+    const th = COCKPIT_THEMES[themeKey] || COCKPIT_THEMES['amber'];
+
+    rootStyle.setProperty('--acc', th.acc);
+    rootStyle.setProperty('--accT', th.accText);
+    rootStyle.setProperty('--line', th.cardBorder);
+    rootStyle.setProperty('--card-glow', th.glow);
+    rootStyle.setProperty('--acc-glow', th.glow);
+    rootStyle.setProperty('--card', th.cardBg);
 
     try {
       localStorage.setItem('soxe_bg', JSON.stringify(bgConfig));
     } catch {}
-  }, [bgConfig]);
+  }, [bgConfig, bgImageUrl]);
 
   // Persist state & schedule Drive sync
   const updateStateAndPersist = (updater: (prev: AppState) => AppState) => {
@@ -389,8 +405,34 @@ export function App() {
   const medals = calculateMedals(state, bgConfig.mode);
 
   return (
-    <main>
-      <Header
+    <>
+      {/* Real-time Dynamic Cockpit Background Layer */}
+      <div
+        id="app-wallpaper-layer"
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none transition-all duration-500 ease-out"
+        style={{
+          zIndex: 0,
+          backgroundImage: bgImageUrl,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center center',
+          backgroundRepeat: 'no-repeat',
+          opacity: bgConfig.mode === 'none' ? 0 : Math.max(0.12, bgConfig.op / 100),
+        }}
+      />
+      {/* Eye-friendly Ambient Cockpit Vignette */}
+      <div
+        aria-hidden="true"
+        className="fixed inset-0 pointer-events-none"
+        style={{
+          zIndex: 0,
+          background:
+            'radial-gradient(ellipse at 50% 30%, rgba(6, 11, 24, 0.1) 20%, rgba(4, 7, 15, 0.76) 100%)',
+        }}
+      />
+
+      <main style={{ position: 'relative', zIndex: 1 }}>
+        <Header
         vehicles={state.vehicles}
         currentVehicleId={state.cur}
         onSelectVehicle={(id) => updateStateAndPersist((prev) => ({ ...prev, cur: id }))}
@@ -584,6 +626,7 @@ export function App() {
         </>
       )}
     </main>
+    </>
   );
 }
 export default App;

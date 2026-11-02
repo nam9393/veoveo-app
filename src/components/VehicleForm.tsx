@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
-import { Vehicle } from '../types';
+import { Vehicle, VehicleCategory } from '../types';
 import { COMMON_BRANDS } from '../constants';
 import { uid } from '../utils/calc';
+import { detectOemTireSpec, barToPsi } from '../utils/oemTireSpecs';
 
 interface VehicleFormProps {
   vehicleToEdit: Vehicle | null;
@@ -24,7 +25,13 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({
   const [tank, setTank] = useState<number | ''>('');
   const [cons, setCons] = useState<number | ''>('');
   const [brand, setBrand] = useState('');
+  const [category, setCategory] = useState<VehicleCategory>('motorcycle');
+  const [frontBar, setFrontBar] = useState<number>(2.0);
+  const [rearBar, setRearBar] = useState<number>(2.25);
+  const [oemNote, setOemNote] = useState<string>('');
+  const [wheelCount, setWheelCount] = useState<2 | 4>(2);
 
+  // Initialize form when vehicleToEdit changes
   useEffect(() => {
     if (vehicleToEdit) {
       setName(vehicleToEdit.name || '');
@@ -33,6 +40,20 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({
       setTank(vehicleToEdit.tank != null ? vehicleToEdit.tank : '');
       setCons(vehicleToEdit.cons != null ? vehicleToEdit.cons : '');
       setBrand(vehicleToEdit.brand || '');
+      const cat = vehicleToEdit.category || 'motorcycle';
+      setCategory(cat);
+      if (vehicleToEdit.oemTire) {
+        setFrontBar(vehicleToEdit.oemTire.frontBar);
+        setRearBar(vehicleToEdit.oemTire.rearBar);
+        setOemNote(vehicleToEdit.oemTire.recommendationNote);
+        setWheelCount(vehicleToEdit.oemTire.wheelCount);
+      } else {
+        const spec = detectOemTireSpec(vehicleToEdit.name, vehicleToEdit.brand, cat);
+        setFrontBar(spec.frontBar);
+        setRearBar(spec.rearBar);
+        setOemNote(spec.recommendationNote);
+        setWheelCount(spec.wheelCount);
+      }
     } else {
       setName('');
       setPlate('');
@@ -40,14 +61,44 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({
       setTank('');
       setCons('');
       setBrand('');
+      setCategory('motorcycle');
+      const spec = detectOemTireSpec('', '', 'motorcycle');
+      setFrontBar(spec.frontBar);
+      setRearBar(spec.rearBar);
+      setOemNote(spec.recommendationNote);
+      setWheelCount(spec.wheelCount);
     }
   }, [vehicleToEdit, isOpen]);
+
+  // Handle vehicle name / brand / category change to detect OEM tire spec
+  const handleNameChange = (val: string) => {
+    setName(val);
+    if (!vehicleToEdit) {
+      const spec = detectOemTireSpec(val, brand);
+      setCategory(spec.category);
+      setFrontBar(spec.frontBar);
+      setRearBar(spec.rearBar);
+      setOemNote(spec.recommendationNote);
+      setWheelCount(spec.wheelCount);
+    }
+  };
+
+  const handleCategoryChange = (cat: VehicleCategory) => {
+    setCategory(cat);
+    const spec = detectOemTireSpec(name, brand, cat);
+    setFrontBar(spec.frontBar);
+    setRearBar(spec.rearBar);
+    setOemNote(spec.recommendationNote);
+    setWheelCount(spec.wheelCount);
+  };
 
   if (!isOpen) return null;
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
+
+    const detected = detectOemTireSpec(name, brand, category);
 
     const vehicleData: Vehicle = {
       id: vehicleToEdit ? vehicleToEdit.id : uid(),
@@ -57,6 +108,23 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({
       tank: typeof tank === 'number' ? tank : undefined,
       cons: typeof cons === 'number' ? cons : undefined,
       brand: brand.trim() || undefined,
+      category,
+      oemTire: {
+        frontBar,
+        rearBar,
+        frontPsi: barToPsi(frontBar),
+        rearPsi: barToPsi(rearBar),
+        recommendationNote: oemNote || detected.recommendationNote,
+        wheelCount,
+      },
+      currentTirePressures: vehicleToEdit?.currentTirePressures || {
+        front: frontBar,
+        rear: rearBar,
+        fl: frontBar,
+        fr: frontBar,
+        rl: rearBar,
+        rr: rearBar,
+      },
       u: Date.now(),
     };
 
@@ -65,30 +133,64 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({
 
   return (
     <div id="vform" className="card">
-      <h2 id="vh">{vehicleToEdit ? '✏️ Sửa xe' : '🚗 Thêm xe'}</h2>
+      <h2 id="vh">{vehicleToEdit ? '✏️ Sửa phương tiện & Áp suất lốp OEM' : '🚗 Thêm phương tiện mới'}</h2>
       <form id="vf" onSubmit={handleSubmit}>
+        {/* Vehicle Category Selector */}
+        <div className="full" style={{ marginBottom: '8px' }}>
+          <label style={{ display: 'block', fontSize: '12px', color: 'var(--mut)', marginBottom: '6px' }}>
+            Phân loại phương tiện
+          </label>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '6px' }}>
+            {[
+              { id: 'motorcycle', label: '🏍️ Xe máy / Tay ga (2 bánh)' },
+              { id: 'car', label: '🚗 Ô tô con Sedan (4 bánh)' },
+              { id: 'suv', label: '🚙 Crossover / SUV (4 bánh)' },
+              { id: 'truck', label: '🛻 Bán tải / Pickup (4 bánh)' },
+            ].map((c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => handleCategoryChange(c.id as VehicleCategory)}
+                style={{
+                  padding: '7px 8px',
+                  fontSize: '11.5px',
+                  borderRadius: '8px',
+                  background: category === c.id ? 'var(--acc)' : 'rgba(255, 255, 255, 0.05)',
+                  color: category === c.id ? 'var(--accT)' : 'var(--ink)',
+                  fontWeight: category === c.id ? 700 : 500,
+                  border: category === c.id ? '1px solid var(--acc)' : '1px solid var(--line)',
+                }}
+              >
+                {c.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
         <label className="full">
-          Tên xe
+          Tên đời xe / Model
           <input
             id="vn"
             required
-            placeholder="Ví dụ: Honda Vision, Mazda CX90"
+            placeholder="Ví dụ: Honda Air Blade 160, Mazda CX-5, Toyota Vios"
             value={name}
-            onChange={(e) => setName(e.target.value)}
+            onChange={(e) => handleNameChange(e.target.value)}
             autoFocus
           />
         </label>
+
         <label>
-          Biển số
+          Biển số xe
           <input
             id="vp"
-            placeholder="61K-123.45, 61D1-123.45"
+            placeholder="61K-123.45, 59A-888.88"
             value={plate}
             onChange={(e) => setPlate(e.target.value)}
           />
         </label>
+
         <label>
-          Số km hiện tại
+          Số km ODO hiện tại
           <input
             id="vo"
             type="number"
@@ -98,52 +200,114 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({
             onChange={(e) => setOdo(e.target.value === '' ? '' : +e.target.value)}
           />
         </label>
+
         <label>
-          🛢️ Dung tích bình xăng (lít)
+          🛢️ Dung tích bình (lít)
           <input
             id="vt"
             type="number"
             step="0.1"
             min="0"
-            placeholder="Ví dụ 5.5"
+            placeholder="Ví dụ: 4.4L (xe máy) hoặc 50L (ô tô)"
             value={tank}
             onChange={(e) => setTank(e.target.value === '' ? '' : +e.target.value)}
           />
         </label>
+
         <label>
-          ⛽ Tiêu hao công bố (L/100km)
+          ⛽ Tiêu hao chuẩn (L/100km)
           <input
             id="vc"
             type="number"
             step="0.01"
             min="0"
-            placeholder="Ví dụ 1.9"
+            placeholder="Ví dụ: 2.1 (xe máy) hoặc 6.8 (ô tô)"
             value={cons}
             onChange={(e) => setCons(e.target.value === '' ? '' : +e.target.value)}
           />
         </label>
+
         <label className="full">
-          🏷️ Hãng xe (để tìm showroom gần bạn)
+          🏷️ Hãng sản xuất
           <input
             id="vb"
             list="vbrands"
-            placeholder="Honda, Yamaha, Toyota, VinFast…"
+            placeholder="Honda, Yamaha, Toyota, Mazda, VinFast, Ford…"
             value={brand}
             onChange={(e) => setBrand(e.target.value)}
           />
         </label>
+
         <datalist id="vbrands">
           {COMMON_BRANDS.map((b) => (
             <option key={b} value={b} />
           ))}
         </datalist>
-        <div className="full row">
+
+        {/* OEM Tire Pressure Specification Box */}
+        <div
+          className="full"
+          style={{
+            margin: '8px 0',
+            padding: '12px 14px',
+            borderRadius: '12px',
+            background: 'rgba(5, 12, 24, 0.75)',
+            border: '1px solid var(--line)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--acc)' }}>
+              🛡️ Áp suất lốp theo khuyến cáo nhà sản xuất (OEM)
+            </span>
+            <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
+              {wheelCount === 2 ? '2 bánh (Trước & Sau)' : '4 bánh'}
+            </span>
+          </div>
+
+          <p style={{ margin: '0 0 10px', fontSize: '12px', color: 'var(--mut)', lineHeight: 1.5 }}>
+            {oemNote || 'Áp suất chuẩn giúp tối ưu quãng đường, tiết kiệm nhiên liệu và an toàn khi phanh.'}
+          </p>
+
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
+            <label style={{ margin: 0 }}>
+              <span style={{ fontSize: '11.5px', color: 'var(--ink)' }}>
+                Bánh trước: <b>{frontBar} bar</b> (~{barToPsi(frontBar)} PSI)
+              </span>
+              <input
+                type="number"
+                step="0.05"
+                min="1.0"
+                max="4.5"
+                value={frontBar}
+                onChange={(e) => setFrontBar(+e.target.value || 2.0)}
+                style={{ marginTop: '4px' }}
+              />
+            </label>
+
+            <label style={{ margin: 0 }}>
+              <span style={{ fontSize: '11.5px', color: 'var(--ink)' }}>
+                Bánh sau: <b>{rearBar} bar</b> (~{barToPsi(rearBar)} PSI)
+              </span>
+              <input
+                type="number"
+                step="0.05"
+                min="1.0"
+                max="4.5"
+                value={rearBar}
+                onChange={(e) => setRearBar(+e.target.value || 2.25)}
+                style={{ marginTop: '4px' }}
+              />
+            </label>
+          </div>
+        </div>
+
+        <div className="full row" style={{ marginTop: '8px' }}>
           <button className="pri" type="submit">
-            Lưu xe
+            💾 Lưu thông tin xe
           </button>
           {canCancel && (
             <button type="button" id="vcancel" onClick={onCancel}>
-              Hủy
+              Đóng
             </button>
           )}
         </div>

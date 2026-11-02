@@ -10,6 +10,17 @@ export interface Place {
   lat: number;
 }
 
+export type VehicleCategory = 'motorcycle' | 'car' | 'suv' | 'truck';
+
+export interface TirePressureSpec {
+  frontBar: number;
+  rearBar: number;
+  frontPsi: number;
+  rearPsi: number;
+  recommendationNote: string;
+  wheelCount: 2 | 4;
+}
+
 export interface Vehicle {
   id: string;
   name: string;
@@ -18,6 +29,16 @@ export interface Vehicle {
   tank?: number;
   cons?: number;
   brand?: string;
+  category?: VehicleCategory;
+  oemTire?: TirePressureSpec;
+  currentTirePressures?: {
+    front?: number;
+    rear?: number;
+    fl?: number;
+    fr?: number;
+    rl?: number;
+    rr?: number;
+  };
   u: number;
 }
 
@@ -66,6 +87,7 @@ export interface BackgroundConfig {
   id: string;
   data: string;
   op: number;
+  theme?: string;
 }
 
 export interface Medal {

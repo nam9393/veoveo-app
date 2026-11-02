@@ -457,10 +457,10 @@ Bạn có thể hỏi tôi về:
     <div
       className="card"
       style={{
-        background: 'linear-gradient(145deg, rgba(10, 18, 36, 0.94), rgba(14, 165, 233, 0.08))',
-        borderColor: isListening ? '#00f0ff' : 'rgba(0, 240, 255, 0.3)',
+        background: 'linear-gradient(145deg, rgba(10, 16, 32, 0.94), rgba(255, 255, 255, 0.02))',
+        borderColor: isListening ? 'var(--acc)' : 'var(--line)',
         boxShadow: isListening
-          ? '0 0 25px rgba(0, 240, 255, 0.4), inset 0 0 15px rgba(0, 240, 255, 0.1)'
+          ? '0 4px 20px var(--card-glow)'
           : undefined,
         marginBottom: '14px',
       }}
@@ -469,7 +469,7 @@ Bạn có thể hỏi tôi về:
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '18px' }}>🚗</span>
           <div>
-            <h2 style={{ margin: 0, fontSize: '14.5px', color: '#00f0ff' }}>
+            <h2 style={{ margin: 0, fontSize: '14.5px', color: 'var(--acc)' }}>
               Trợ Lý Xe Ô Tô AI · Giọng Nói Hai Chiều
             </h2>
             <small style={{ color: 'var(--mut)', fontSize: '11px' }}>
@@ -487,9 +487,9 @@ Bạn có thể hỏi tôi về:
           style={{
             fontSize: '12px',
             padding: '5px 11px',
-            background: aiChatOpen ? 'rgba(0, 240, 255, 0.25)' : 'rgba(0, 240, 255, 0.12)',
-            borderColor: 'rgba(0, 240, 255, 0.35)',
-            color: '#e0f2fe',
+            background: aiChatOpen ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.05)',
+            borderColor: 'var(--line)',
+            color: '#f8fafc',
             fontWeight: 600,
           }}
         >
@@ -510,13 +510,13 @@ Bạn có thể hỏi tôi về:
             padding: 0,
             flexShrink: 0,
             background: isListening
-              ? 'radial-gradient(circle, #ff0055 30%, #b91c1c 100%)'
-              : 'radial-gradient(circle, #00f0ff 20%, #0284c7 100%)',
-            borderColor: isListening ? '#ff3366' : '#00f0ff',
+              ? '#ef4444'
+              : 'var(--acc)',
+            borderColor: isListening ? '#f87171' : 'var(--acc)',
             boxShadow: isListening
-              ? '0 0 22px #ff0055'
-              : '0 0 16px rgba(0, 240, 255, 0.6)',
-            color: '#fff',
+              ? '0 4px 14px rgba(239, 68, 68, 0.4)'
+              : '0 4px 14px var(--card-glow)',
+            color: isListening ? '#fff' : 'var(--accT)',
             fontSize: '20px',
             cursor: 'pointer',
             transition: 'all 0.2s ease',
@@ -542,7 +542,7 @@ Bạn có thể hỏi tôi về:
             }}
             style={{
               width: '100%',
-              borderColor: isListening ? '#00f0ff' : undefined,
+              borderColor: isListening ? 'var(--acc)' : undefined,
               paddingRight: isProcessing ? '40px' : '10px',
             }}
           />
@@ -554,7 +554,7 @@ Bạn có thể hỏi tôi về:
                 top: '50%',
                 transform: 'translateY(-50%)',
                 fontSize: '14px',
-                color: '#00f0ff',
+                color: 'var(--acc)',
               }}
             >
               ⚡

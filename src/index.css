@@ -1,25 +1,25 @@
 @import "tailwindcss";
 
 :root {
-  --bg: #070c1a;
+  --bg: #070c18;
   --bg-deep: #03060f;
-  --card: rgba(12, 22, 45, 0.82);
-  --card-glow: rgba(0, 240, 255, 0.12);
-  --ink: #e2f1ff;
-  --mut: #7e9bb6;
-  --line: rgba(0, 240, 255, 0.18);
-  --acc: #00f0ff;
-  --accT: #03121f;
-  --acc-glow: 0 0 15px rgba(0, 240, 255, 0.5);
-  --in: #00ff88;
-  --out: #ff3366;
-  --fuel: #ffaa00;
-  --svc: #7000ff;
-  --oth: #bf00ff;
-  --inp: rgba(6, 14, 30, 0.85);
-  --gold: #ffcc00;
-  --violet: #8a2be2;
-  --cyan: #00f0ff;
+  --card: rgba(14, 22, 38, 0.78);
+  --card-glow: rgba(245, 158, 11, 0.12);
+  --ink: #f1f5f9;
+  --mut: #94a3b8;
+  --line: rgba(245, 158, 11, 0.22);
+  --acc: #f59e0b;
+  --accT: #18181b;
+  --acc-glow: rgba(245, 158, 11, 0.2);
+  --in: #10b981;
+  --out: #f43f5e;
+  --fuel: #f59e0b;
+  --svc: #8b5cf6;
+  --oth: #a855f7;
+  --inp: rgba(9, 15, 28, 0.88);
+  --gold: #f59e0b;
+  --violet: #8b5cf6;
+  --cyan: #38bdf8;
   color-scheme: dark;
   box-sizing: border-box;
   padding-top: env(safe-area-inset-top, 0px);
@@ -32,44 +32,17 @@
 
 html {
   scroll-padding-top: env(safe-area-inset-top, 0px);
-  background: var(--bg);
+  background: #060a14;
 }
 
 body {
   margin: 0;
-  background: var(--bg);
+  background: transparent;
   color: var(--ink);
   font: 14.5px/1.6 "Be Vietnam Pro", system-ui, -apple-system, sans-serif;
   min-height: 100vh;
   position: relative;
   overflow-x: hidden;
-}
-
-/* Realistic Automotive Cockpit & Road Background Layer */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -3;
-  background-image: var(--bgimg, none);
-  background-size: cover;
-  background-position: center center;
-  background-repeat: no-repeat;
-  opacity: var(--bgop, 0.4);
-  transition: opacity 0.3s ease, background-image 0.3s ease;
-  pointer-events: none;
-}
-
-/* Subtle Automotive Windshield & Cockpit Vignette */
-body::after {
-  content: "";
-  position: fixed;
-  inset: 0;
-  z-index: -2;
-  background: 
-    radial-gradient(ellipse at 50% 35%, transparent 30%, rgba(5, 11, 22, 0.75) 100%),
-    linear-gradient(180deg, rgba(8, 15, 30, 0.25) 0%, rgba(4, 8, 16, 0.88) 100%);
-  pointer-events: none;
 }
 
 main {
@@ -80,34 +53,32 @@ main {
   z-index: 1;
 }
 
-/* Space Cockpit HUD Card */
+/* Realistic Automotive Cockpit HUD Card */
 .card {
   background: var(--card);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--line);
   border-radius: 16px;
   padding: 16px;
   margin-bottom: 14px;
-  box-shadow: 0 10px 35px 0 rgba(0, 0, 0, 0.45), inset 0 0 15px rgba(0, 240, 255, 0.04);
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
   position: relative;
-  transition: border-color 0.25s, box-shadow 0.25s;
+  transition: border-color 0.25s, box-shadow 0.25s, background-color 0.25s;
 }
 
 .card:hover {
-  border-color: rgba(0, 240, 255, 0.32);
-  box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.55), 0 0 16px rgba(0, 240, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.18);
+  box-shadow: 0 10px 36px 0 rgba(0, 0, 0, 0.52);
 }
 
-/* Headings with Hologram Cyan Sheen */
+/* Automotive Cockpit Headings */
 h1 {
-  font-size: 21px;
+  font-size: 20px;
   margin: 0;
   font-weight: 800;
-  letter-spacing: -0.02em;
-  background: linear-gradient(135deg, #ffffff 30%, #00f0ff 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+  letter-spacing: -0.01em;
+  color: #f8fafc;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -117,9 +88,8 @@ h2 {
   font-size: 15px;
   margin: 0 0 10px;
   font-weight: 700;
-  color: #e2f1ff;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
+  color: #f1f5f9;
+  letter-spacing: 0.01em;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -141,7 +111,7 @@ h2 {
   align-items: center;
 }
 
-/* Sci-Fi Inputs & Controls */
+/* Automotive Dashboard Controls */
 select, input, textarea, button {
   font: inherit;
   color: var(--ink);
@@ -149,28 +119,28 @@ select, input, textarea, button {
 
 select, input, textarea {
   background: var(--inp);
-  border: 1px solid rgba(0, 240, 255, 0.2);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 9px 12px;
   min-width: 0;
-  color: #fff;
-  transition: all 0.2s ease;
+  color: #f8fafc;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
 }
 
 input:focus, select:focus, button:focus-visible, textarea:focus {
   outline: none;
   border-color: var(--acc);
-  box-shadow: 0 0 12px rgba(0, 240, 255, 0.45);
+  box-shadow: 0 0 0 2px var(--acc-glow);
 }
 
 button {
-  background: rgba(12, 25, 50, 0.9);
-  border: 1px solid rgba(0, 240, 255, 0.25);
+  background: rgba(18, 26, 44, 0.85);
+  border: 1px solid var(--line);
   border-radius: 10px;
   padding: 8px 14px;
   cursor: pointer;
   transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
-  color: #e0f2fe;
+  color: #f1f5f9;
   font-weight: 500;
   display: inline-flex;
   align-items: center;
@@ -180,21 +150,21 @@ button {
 
 button:hover {
   border-color: var(--acc);
-  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+  box-shadow: 0 4px 14px var(--card-glow);
   transform: translateY(-1px);
 }
 
 button.pri {
-  background: linear-gradient(135deg, #00f0ff 0%, #00a2ff 100%);
-  color: #03121f;
-  border-color: #00f0ff;
+  background: var(--acc);
+  color: var(--accT);
+  border-color: var(--acc);
   font-weight: 700;
-  box-shadow: 0 0 16px rgba(0, 240, 255, 0.4);
+  box-shadow: 0 4px 14px var(--acc-glow);
 }
 
 button.pri:hover {
-  box-shadow: 0 0 24px rgba(0, 240, 255, 0.65);
-  filter: brightness(1.1);
+  filter: brightness(1.08);
+  box-shadow: 0 6px 18px var(--acc-glow);
 }
 
 button.lnk {
@@ -208,7 +178,6 @@ button.lnk {
 button.lnk:hover {
   color: var(--acc);
   text-decoration: none;
-  text-shadow: 0 0 8px rgba(0, 240, 255, 0.6);
 }
 
 /* High-tech KPI Telemetry Grid */
@@ -221,16 +190,16 @@ button.lnk:hover {
 .kpi {
   padding: 12px 14px;
   border-radius: 12px;
-  background: rgba(7, 16, 36, 0.85);
-  border: 1px solid rgba(0, 240, 255, 0.15);
+  background: rgba(10, 17, 34, 0.75);
+  border: 1px solid var(--line);
   position: relative;
   overflow: hidden;
   transition: all 0.2s ease;
 }
 
 .kpi:hover {
-  border-color: rgba(0, 240, 255, 0.35);
-  box-shadow: 0 0 14px rgba(0, 240, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.35);
 }
 
 .kpi small {
@@ -240,7 +209,7 @@ button.lnk:hover {
   gap: 4px;
   font-size: 11.5px;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   font-weight: 600;
 }
 
@@ -265,13 +234,11 @@ button.lnk:hover {
 }
 
 .in {
-  color: var(--in);
-  text-shadow: 0 0 8px rgba(0, 255, 136, 0.3);
+  color: #10b981;
 }
 
 .out {
-  color: var(--out);
-  text-shadow: 0 0 8px rgba(255, 51, 102, 0.3);
+  color: #f43f5e;
 }
 
 /* Cockpit Flight Deck Tabs */
@@ -554,8 +521,8 @@ textarea {
   display: flex;
   gap: 6px;
   padding: 6px;
-  background: rgba(6, 13, 28, 0.92);
-  border: 1px solid rgba(0, 240, 255, 0.25);
+  background: rgba(10, 16, 32, 0.9);
+  border: 1px solid var(--line);
   border-radius: 14px;
   backdrop-filter: blur(20px);
   margin-bottom: 14px;
@@ -583,14 +550,14 @@ textarea {
 
 .hud-nav-item:hover {
   color: #fff;
-  background: rgba(0, 240, 255, 0.08);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .hud-nav-item.active {
-  background: linear-gradient(135deg, rgba(0, 240, 255, 0.22) 0%, rgba(112, 0, 255, 0.22) 100%);
-  color: #00f0ff;
-  border-color: rgba(0, 240, 255, 0.5);
-  box-shadow: 0 0 14px rgba(0, 240, 255, 0.35);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--acc);
+  border-color: var(--line);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
 }
 
 /* Details summary */
@@ -600,7 +567,7 @@ details.fold > summary {
   padding: 12px 14px;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgba(6, 14, 30, 0.85);
+  background: rgba(8, 14, 28, 0.85);
   transition: all 0.2s;
 }
 
@@ -622,11 +589,11 @@ details.fold > summary::after {
   line-height: 28px;
   text-align: center;
   border-radius: 50%;
-  background: rgba(0, 240, 255, 0.2);
-  color: #00f0ff;
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--acc);
   font-size: 15px;
   margin: -3px 0;
-  border: 1px solid rgba(0, 240, 255, 0.3);
+  border: 1px solid var(--line);
 }
 
 details.fold[open] > summary {
@@ -723,7 +690,7 @@ details.yr > details.mg {
 /* Background Presets */
 .bgt {
   height: 64px;
-  border: 2px solid rgba(0, 240, 255, 0.2);
+  border: 2px solid var(--line);
   border-radius: 12px;
   color: #fff;
   font-size: 11px;
@@ -739,7 +706,7 @@ details.yr > details.mg {
 
 .bgt.on {
   border-color: var(--acc);
-  box-shadow: 0 0 16px rgba(0, 240, 255, 0.45);
+  box-shadow: 0 4px 14px var(--acc-glow);
 }
 
 /* Burst */
