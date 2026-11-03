@@ -24,7 +24,7 @@ const ai = new GoogleGenAI({
   },
 });
 
-// Intelligent Local Vehicle Expert Fallback Engine (when Gemini API rate limit is reached or offline)
+// Intelligent Local Vehicle Expert Fallback Engine (Em Vy - Nữ trợ lý lái xe riêng quyến rũ, ngọt ngào)
 function getLocalCopilotAdvice(message: string, context: any): string {
   const lower = (message || '').toLowerCase();
   const vName = context?.vehicleName || 'xe';
@@ -33,56 +33,51 @@ function getLocalCopilotAdvice(message: string, context: any): string {
   const cons = context?.cons ? `${context.cons} L/100km` : 'chưa xác định';
 
   if (lower.includes('nhớt') || lower.includes('dầu máy')) {
-    return `🛢️ [Tư vấn nhớt ${vName}]:
-- Xe máy phổ thông: Thay sau mỗi 1.500 - 2.000 km (nhớt khoáng/bán tổng hợp) hoặc 3.000 - 4.000 km (nhớt tổng hợp toàn phần 100% Synthetic như Motul, Liqui Moly, Shell Advance).
-- Ô tô: Thay nhớt động cơ sau mỗi 5.000 km (nhớt thông thường) hoặc 10.000 km (nhớt tổng hợp). Luôn nhớ thay lọc nhớt sau mỗi 2 lần thay nhớt máy.
-- Đồng hồ ${vName} hiện tại: ${odo.toLocaleString('vi-VN')} km. Hãy kiểm tra que thăm nhớt định kỳ hàng tháng!`;
+    return `🛢️ Dạ anh yêu ơi, về nhớt xe ${vName} của anh nè:
+- Nếu anh đi xe máy phổ thông: Anh nhớ thay sau mỗi 1.500 - 2.000 km (nhớt thường) hoặc 3.000 - 4.000 km (nhớt tổng hợp 100% Synthetic nha anh).
+- Nếu anh lái ô tô: Thay nhớt máy sau 5.000 km (nhớt thường) hoặc 10.000 km (nhớt tổng hợp). Cứ 2 lần thay nhớt thì anh thay luôn cốc lọc nhớt để máy luôn êm ái nhé.
+- Đồng hồ xe anh hiện tại đang là ${odo.toLocaleString('vi-VN')} km. Anh nhớ chăm chút cho xe để em và anh vi vu mượt mà nha!`;
   }
 
   if (lower.includes('xăng') || lower.includes('tiêu thụ') || lower.includes('tiêu hao') || lower.includes('tiết kiệm')) {
-    return `⛽ [Mức tiêu hao & Tiết kiệm nhiên liệu cho ${vName}]:
-- Thông số tiêu chuẩn xe: ~${cons} (Bình xăng: ${tank}).
-- Mẹo tiết kiệm xăng thực tế:
-  1. Giữ đều tay ga / chân ga, tránh thốc ga đột ngột và phanh gấp liên tục.
-  2. Duy trì áp suất lốp đúng chuẩn (lốp non hơi làm tăng 5 - 10% mức tiêu thụ).
-  3. Vệ sinh lọc gió động cơ mỗi 5.000 km và thay mới ở mốc 15.000 - 20.000 km.
-  4. Đổ xăng buổi sáng sớm hoặc chiều tối khi nhiệt độ môi trường mát mẻ, xăng ít bị giãn nở bay hơi.`;
+    return `⛽ Dạ em chia sẻ bí kíp tiết kiệm xăng cho anh yêu đây:
+- Xe ${vName} của anh có dung tích bình ${tank}, mức tiêu thụ khoảng ~${cons}.
+- Để tiết kiệm thêm 10 - 15% tiền xăng, anh nhớ:
+  1. Giữ chân ga/tay ga thật đều, tránh thốc ga bất ngờ và phanh gấp liên tục.
+  2. Bơm lốp đủ áp suất chuẩn, lốp non sẽ làm xe anh bị 'uống' thêm xăng đó ạ.
+  3. Đổ xăng vào sáng sớm hoặc chiều mát, lúc đó xăng cô đặc hơn và không bị bay hơi.
+Anh lái xe cẩn thận, em luôn bên cạnh anh nè!`;
   }
 
   if (lower.includes('lốp') || lower.includes('áp suất') || lower.includes('vỏ xe')) {
-    return `🛞 [Tư vấn lốp & Áp suất cho ${vName}]:
-- Xe máy: Bánh trước thường từ 1.8 - 2.0 kg/cm² (26 - 29 PSI), bánh sau từ 2.2 - 2.5 kg/cm² (32 - 36 PSI).
-- Ô tô: Thường từ 2.2 - 2.5 bar (31 - 36 PSI), kiểm tra tem dán ở khung cửa ghế lái.
-- Định kỳ: Đảo lốp mỗi 10.000 km và thay lốp mới sau 40.000 - 50.000 km hoặc sau 5 năm sử dụng.`;
+    return `🛞 Dạ anh yêu, lốp xe là sự an toàn tính mạng của anh đó nha:
+- Xe 2 bánh: Bánh trước bơm 1.8 - 2.0 bar (29 PSI), bánh sau 2.2 - 2.4 bar (33 PSI).
+- Ô tô: Thường từ 2.2 - 2.4 bar (32 - 35 PSI) tùy tải trọng.
+- Cứ mỗi 10.000 km anh đảo lốp một lần nha. Anh an toàn thì em mới an lòng được ạ!`;
   }
 
   if (lower.includes('bugi') || lower.includes('đánh lửa')) {
-    return `⚡ [Bảo dưỡng Bugi]:
-- Bugi tiêu chuẩn (Nickel/Đồng): Nên kiểm tra vệ sinh mỗi 8.000 km và thay mới sau 12.000 - 15.000 km.
-- Bugi cao cấp (Iridium / Platinum): Tuổi thọ từ 40.000 - 80.000 km đối với ô tô và 20.000 - 30.000 km đối với xe máy.
-- Dấu hiệu cần thay: Xe khó nổ buổi sáng, hụt ga, giật cục khi tăng tốc hoặc khói đen.`;
+    return `⚡ Dạ bugi xe ${vName} của anh:
+- Bugi tiêu chuẩn nên vệ sinh mỗi 8.000 km và thay mới sau 12.000 - 15.000 km.
+- Nếu sáng sớm anh thấy xe khó nổ hoặc hụt ga khi tăng tốc là bugi đang 'làm nũng' muốn anh thay mới rồi đó anh yêu!`;
   }
 
   if (lower.includes('phanh') || lower.includes('thắng') || lower.includes('bố thắng')) {
-    return `🛑 [Hệ thống phanh]:
-- Kiểm tra độ dày má phanh mỗi 5.000 km. Nếu má phanh mòn còn dưới 2mm thì cần thay ngay để tránh làm xước đĩa phanh.
-- Thay dầu phanh (DOT 3 / DOT 4) sau mỗi 2 năm hoặc 20.000 km để đảm bảo áp suất thủy lực an toàn.`;
+    return `🛑 Dạ hệ thống phanh xe là quan trọng nhất khi anh đi đường:
+- Anh nhớ liếc nhìn má phanh sau mỗi 5.000 km nha, nếu mòn dưới 2mm thì thay ngay kẻo xước đĩa phanh.
+- Dầu phanh thay sau 2 năm. Anh an toàn trở về nhà là niềm hạnh phúc của em!`;
   }
 
   if (lower.includes('bảo dưỡng') || lower.includes('kiểm tra')) {
-    return `🔧 [Lịch bảo dưỡng khuyến nghị cho ${vName} - Mốc ${odo.toLocaleString('vi-VN')} km]:
-- Mốc 5.000 km: Thay nhớt, kiểm tra áp suất lốp, xích/dây curoa, tra mỡ chân chống.
-- Mốc 10.000 km: Vệ sinh lọc gió, kiểm tra má phanh, ắc quy, nước làm mát.
-- Mốc 15.000 - 20.000 km: Thay lọc gió, thay bugi, thay dầu phanh, vệ sinh buồng đốt / kim phun xăng điện tử (FI).`;
+    return `🔧 Dạ lịch cưng nựng xe ${vName} ở mốc ${odo.toLocaleString('vi-VN')} km của anh đây:
+- Kiểm tra nhớt máy, nhớt hộp số, vệ sinh lọc gió và xịt sên/tra mỡ.
+- Kiểm tra áp suất lốp và phanh an toàn.
+Có gì băn khoăn anh cứ hỏi em, em phục vụ anh hết mình luôn nè!`;
   }
 
-  return `🚗 [Trợ lý Lái Xe Veo Copilot - Xe ${vName}]:
-Tôi đã ghi nhận câu hỏi của bạn. Phương tiện "${vName}" hiện đang ghi nhận Odo: ${odo.toLocaleString('vi-VN')} km.
-Bạn có thể hỏi tôi bất kỳ điều gì về:
-1. Mức tiêu hao xăng thực tế & kinh nghiệm lái tiết kiệm.
-2. Mốc thay nhớt máy, nhớt số, lọc gió, bugi, má phanh.
-3. Hướng dẫn ra lệnh bằng giọng nói: "lệnh: đổ xăng, giá tiền: 500k" hoặc "thay nhớt 250k".
-Copilot luôn sẵn sàng đồng hành cùng bạn trên mọi cung đường!`;
+  return `🚗 Dạ em nghe đây nè anh yêu! Em là Vy - trợ lý lái xe riêng của anh.
+Xe "${vName}" của anh hiện đang ở mốc Odometer: ${odo.toLocaleString('vi-VN')} km.
+Anh muốn em tư vấn về mức tiêu hao xăng, lịch thay nhớt máy, áp suất lốp an toàn hay có câu hỏi gì về xe, anh cứ nói với em nhé!`;
 }
 
 // Endpoint: Parse voice or text command into structured Vehicle Log Entry
@@ -184,14 +179,17 @@ app.post('/api/gemini/chat', async (req, res) => {
     }
 
     const contextStr = context ? JSON.stringify(context) : 'Chưa có thông tin xe.';
-    const prompt = `Bạn là Trợ lý lái xe thông minh Veo Copilot của ứng dụng Veo App.
-Hãy trò chuyện, tư vấn kỹ thuật xe ô tô/xe máy, kinh nghiệm lái xe thực tế, mẹo tiết kiệm nhiên liệu, nhắc bảo dưỡng phụ tùng định kỳ hoặc giải đáp thắc mắc của chủ xe.
-Giọng điệu: Thân thiện, thực tế, chuyên nghiệp, ngôn ngữ tiếng Việt tự nhiên và súc tích. Tuyệt đối không nhắc tới phi thuyền, không gian hay viễn tưởng.
+    const prompt = `Bạn là Vy (Em Vy) - Nữ trợ lý lái xe riêng cực kỳ ngọt ngào, dịu dàng, nũng nịu, quyến rũ, sexy và chu đáo của anh chủ xe trong ứng dụng Veo App.
+Cách xưng hô và phong cách:
+- Luôn luôn xưng "Em" và gọi người dùng là "Anh", "Anh yêu", hoặc "Anh tài".
+- Giọng điệu ấm áp, ân cần, ngọt ngào, sexy và tình cảm, luôn quan tâm nhắc nhở anh lái xe an toàn, giữ gìn sức khỏe và cưng nựng chiếc xe của anh.
+- Kiến thức kỹ thuật xe (tiêu hao xăng, nhớt máy, lốp xe, phụ tùng, phanh, bugi) phải chuẩn xác 100%, thực tế, ngắn gọn, súc tích (khoảng 2-4 câu hoặc gạch đầu dòng rõ ràng).
+- Tuyệt đối không dùng từ ngữ robot hay phi thuyền không gian viễn tưởng. Hãy nói như một cô bạn gái thông minh, gợi cảm, am hiểu xe cộ đang ngồi bên ghế phụ đồng hành cùng anh.
 
 Dữ liệu phương tiện và thông số hiện tại:
 ${contextStr}
 
-Yêu cầu người dùng:
+Yêu cầu của anh yêu:
 "${message}"`;
 
     const response = await ai.models.generateContent({

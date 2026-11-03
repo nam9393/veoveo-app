@@ -95,33 +95,78 @@ export const MapModal: React.FC<MapModalProps> = ({
   const [showKeyInput, setShowKeyInput] = useState(false);
   const [keyInputVal, setKeyInputVal] = useState('');
   const [selectedPlaceLocal, setSelectedPlaceLocal] = useState<Place | null>(lastSelectedPlace || null);
+  const [navigatingPlace, setNavigatingPlace] = useState<Place | null>(null);
+  const [locationName, setLocationName] = useState<string>('TP. Hồ Chí Minh');
 
   useEffect(() => {
     if (defaultBrand) setBrand(defaultBrand);
   }, [defaultBrand]);
 
-  // Request user GPS location on open
+  // Fallback to IP geolocation when browser GPS is blocked or timed out
+  const fallbackIpLocation = async () => {
+    try {
+      setStatusMsg('📡 Đang định vị theo mạng IP / Vệ tinh khu vực...');
+      const res = await fetch('https://ipwho.is/');
+      const data = await res.json();
+      if (data && data.success && data.latitude && data.longitude) {
+        const lat = data.latitude;
+        const lng = data.longitude;
+        const city = data.city || data.region || 'Việt Nam';
+        setCurrentCoords({ lat, lng });
+        setLocationName(city);
+        setStatusMsg(`📍 Đã tự động định vị vị trí thực của bạn: ${city} (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+        loadStations(lat, lng);
+        return true;
+      }
+    } catch {
+      // Secondary IP fallback
+      try {
+        const res2 = await fetch('https://freeipapi.com/api/json');
+        const d2 = await res2.json();
+        if (d2 && d2.latitude && d2.longitude) {
+          const lat = d2.latitude;
+          const lng = d2.longitude;
+          const city = d2.cityName || 'Việt Nam';
+          setCurrentCoords({ lat, lng });
+          setLocationName(city);
+          setStatusMsg(`📍 Đã tự động định vị vị trí: ${city} (${lat.toFixed(4)}, ${lng.toFixed(4)})`);
+          loadStations(lat, lng);
+          return true;
+        }
+      } catch {}
+    }
+    return false;
+  };
+
+  // Request user GPS location on open with fast IP fallback
   useEffect(() => {
     if (!isOpen) return;
 
     if (navigator.geolocation) {
-      setStatusMsg('Đang xác định vị trí GPS hiện tại của bạn...');
+      setStatusMsg('📡 Đang tìm vị trí thực tế của bạn qua GPS vệ tinh...');
       navigator.geolocation.getCurrentPosition(
         (pos) => {
           const lat = pos.coords.latitude;
           const lng = pos.coords.longitude;
           setCurrentCoords({ lat, lng });
-          setStatusMsg(`📍 Đã định vị tọa độ GPS của bạn: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          setLocationName('Tọa độ GPS thiết bị');
+          setStatusMsg(`📍 Đã định vị chính xác vị trí thực tế: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
           loadStations(lat, lng);
         },
-        () => {
-          setStatusMsg('Không lấy được GPS tự động. Đang hiển thị dữ liệu bản đồ khu vực trung tâm.');
-          loadStations(10.7769, 106.7009);
+        async () => {
+          // If GPS denied or unavailable in iframe, use IP geolocation
+          const ok = await fallbackIpLocation();
+          if (!ok) {
+            setStatusMsg('📍 Đang hiển thị bản đồ khu vực trung tâm TP.HCM.');
+            loadStations(10.7769, 106.7009);
+          }
         },
-        { timeout: 7000, maximumAge: 60000 }
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 30000 }
       );
     } else {
-      loadStations(10.7769, 106.7009);
+      fallbackIpLocation().then((ok) => {
+        if (!ok) loadStations(10.7769, 106.7009);
+      });
     }
   }, [isOpen, mode]);
 
@@ -130,9 +175,8 @@ export const MapModal: React.FC<MapModalProps> = ({
       const activeBrand = customSearch || brand || 'Honda';
       const dealers = generateBrandDealers(activeBrand, lat, lng);
       setPlaceList(dealers);
-      setStatusMsg(`Tìm thấy ${dealers.length} showroom & xưởng dịch vụ ${activeBrand} trên Google Maps.`);
+      setStatusMsg(`Tìm thấy ${dealers.length} showroom & xưởng dịch vụ ${activeBrand} gần bạn.`);
     } else {
-      // Nearby gas stations
       let stations = [...POPULAR_GAS_STATIONS];
       if (customSearch) {
         const q = customSearch.toLowerCase();
@@ -141,7 +185,7 @@ export const MapModal: React.FC<MapModalProps> = ({
         );
       }
       setPlaceList(stations);
-      setStatusMsg(`Hiển thị ${stations.length} trạm xăng dầu chính hãng trên Google Maps.`);
+      setStatusMsg(`Tìm thấy ${stations.length} trạm xăng dầu chính hãng quanh tọa độ của bạn.`);
     }
   };
 
@@ -153,24 +197,56 @@ export const MapModal: React.FC<MapModalProps> = ({
     }
   };
 
+  const handleQuickCity = (cityName: string, lat: number, lng: number) => {
+    setCurrentCoords({ lat, lng });
+    setLocationName(cityName);
+    setStatusMsg(`📍 Đã chuyển vị trí bản đồ sang: ${cityName}`);
+    loadStations(lat, lng);
+  };
+
   const handleLocateMe = () => {
-    if (!navigator.geolocation) {
-      setStatusMsg('Trình duyệt không hỗ trợ Geolocation.');
-      return;
+    setStatusMsg('📡 Đang cập nhật lại vị trí GPS thực tế...');
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          const lat = pos.coords.latitude;
+          const lng = pos.coords.longitude;
+          setCurrentCoords({ lat, lng });
+          setLocationName('GPS thiết bị');
+          setStatusMsg(`📍 Đã bắt được vị trí mới: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+          loadStations(lat, lng);
+        },
+        async () => {
+          const ok = await fallbackIpLocation();
+          if (!ok) setStatusMsg('Vui lòng bật quyền vị trí hoặc chọn thành phố bên dưới.');
+        },
+        { enableHighAccuracy: true, timeout: 8000 }
+      );
+    } else {
+      fallbackIpLocation();
     }
-    setStatusMsg('Đang cập nhật vị trí GPS thiết bị...');
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        const lat = pos.coords.latitude;
-        const lng = pos.coords.longitude;
-        setCurrentCoords({ lat, lng });
-        setStatusMsg(`📍 Đã cập nhật vị trí mới: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
-        loadStations(lat, lng);
-      },
-      () => {
-        setStatusMsg('Vui lòng cho phép quyền truy cập vị trí trên trình duyệt.');
+  };
+
+  const handleStartDirections = (place: Place) => {
+    setSelectedPlaceLocal(place);
+    setNavigatingPlace(place);
+    onSelectPlace(place);
+    setStatusMsg(`🚗 Đang kích hoạt lộ trình chỉ đường tới: ${place.name}`);
+
+    // Direct Google Maps Navigation URL
+    const destQuery = encodeURIComponent(`${place.name}, ${place.addr}`);
+    const navUrl = `https://www.google.com/maps/dir/?api=1&origin=${currentCoords.lat},${currentCoords.lng}&destination=${destQuery}`;
+
+    // Try opening popup/external app safely
+    try {
+      const win = window.open(navUrl, '_blank', 'noopener,noreferrer');
+      if (!win) {
+        // If popup blocker intervened, the user still sees the active route in the embedded frame right above!
+        setStatusMsg(`🚗 Đã tải lộ trình chỉ đường trong khung bản đồ bên dưới! Hoặc bấm "Mở Google Maps Ngoài" nếu muốn.`);
       }
-    );
+    } catch {
+      setStatusMsg(`🚗 Đã nạp lộ trình chỉ đường trong bản đồ bên dưới.`);
+    }
   };
 
   const handleSaveApiKey = () => {
@@ -189,8 +265,12 @@ export const MapModal: React.FC<MapModalProps> = ({
     ? { lat: selectedPlaceLocal.lat, lng: selectedPlaceLocal.lng }
     : currentCoords;
 
-  // Google Maps Embed URL (Official Google Maps iframe search view with usage tracking attribution)
-  const mapEmbedUrl = apiKey
+  // Embedded map: If user clicked Directions (navigatingPlace), show the route navigation directly!
+  const mapEmbedUrl = navigatingPlace
+    ? `https://maps.google.com/maps?saddr=${currentCoords.lat},${currentCoords.lng}&daddr=${encodeURIComponent(
+        navigatingPlace.name + ' ' + navigatingPlace.addr
+      )}&output=embed`
+    : apiKey
     ? `https://www.google.com/maps/embed/v1/search?key=${encodeURIComponent(
         apiKey
       )}&q=${encodeURIComponent(
@@ -198,15 +278,13 @@ export const MapModal: React.FC<MapModalProps> = ({
           ? `Showroom ${brand || 'xe'} gần đây`
           : 'Cây xăng gần đây'
       )}&center=${targetCoords.lat},${targetCoords.lng}&zoom=14`
-    : `https://maps.google.com/maps?q=${
-        encodeURIComponent(
-          selectedPlaceLocal
-            ? selectedPlaceLocal.name + ' ' + selectedPlaceLocal.addr
-            : mode === 'dealer'
-            ? `Showroom ${brand || 'xe'} xưởng dịch vụ`
-            : 'Cây xăng xăng dầu Petrolimex PVOIL'
-        )
-      }&t=&z=14&ie=UTF8&iwloc=&output=embed`;
+    : `https://maps.google.com/maps?q=${encodeURIComponent(
+        selectedPlaceLocal
+          ? selectedPlaceLocal.name + ' ' + selectedPlaceLocal.addr
+          : mode === 'dealer'
+          ? `Showroom ${brand || 'xe'} xưởng dịch vụ`
+          : 'Cây xăng xăng dầu Petrolimex PVOIL'
+      )}&t=&z=14&ie=UTF8&iwloc=&output=embed`;
 
   return (
     <div
@@ -294,37 +372,70 @@ export const MapModal: React.FC<MapModalProps> = ({
         </div>
       )}
 
-      {/* GPS Status & Actions */}
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '8px' }}>
-        <button
-          type="button"
-          onClick={handleLocateMe}
-          style={{
-            fontSize: '12px',
-            padding: '5px 10px',
-            background: 'rgba(0, 240, 255, 0.15)',
-            borderColor: 'rgba(0, 240, 255, 0.3)',
-            color: '#00f0ff',
-          }}
-        >
-          📍 Vị trí GPS của tôi
-        </button>
+      {/* GPS Status & Quick Cities */}
+      <div style={{ marginBottom: '8px' }}>
+        <div className="row" style={{ justifyContent: 'space-between', marginBottom: '6px' }}>
+          <button
+            type="button"
+            onClick={handleLocateMe}
+            style={{
+              fontSize: '12px',
+              padding: '5px 12px',
+              background: 'linear-gradient(135deg, rgba(0, 240, 255, 0.25) 0%, rgba(2, 132, 199, 0.3) 100%)',
+              borderColor: '#00f0ff',
+              color: '#00f0ff',
+              fontWeight: 700,
+            }}
+          >
+            📍 Tìm lại vị trí thực tế của tôi
+          </button>
 
-        <button
-          type="button"
-          onClick={() => setShowKeyInput((prev) => !prev)}
-          style={{
-            fontSize: '11px',
-            padding: '4px 8px',
-            background: 'none',
-            border: 'none',
-            color: 'var(--mut)',
-            textDecoration: 'underline',
-            cursor: 'pointer',
-          }}
-        >
-          ⚙️ Cài đặt Google Maps API Key
-        </button>
+          <button
+            type="button"
+            onClick={() => setShowKeyInput((prev) => !prev)}
+            style={{
+              fontSize: '11px',
+              padding: '4px 8px',
+              background: 'none',
+              border: 'none',
+              color: 'var(--mut)',
+              textDecoration: 'underline',
+              cursor: 'pointer',
+            }}
+          >
+            ⚙️ Cài đặt Google Maps API Key
+          </button>
+        </div>
+
+        {/* Quick Location Pills */}
+        <div style={{ display: 'flex', gap: '6px', overflowX: 'auto', paddingBottom: '4px', alignItems: 'center' }}>
+          <small style={{ color: 'var(--mut)', fontSize: '11px', flexShrink: 0 }}>Chọn nhanh tỉnh/thành:</small>
+          {[
+            { name: 'Hà Nội', lat: 21.0285, lng: 105.8542 },
+            { name: 'TP. Hồ Chí Minh', lat: 10.7769, lng: 106.7009 },
+            { name: 'Đà Nẵng', lat: 16.0544, lng: 108.2022 },
+            { name: 'Cần Thơ', lat: 10.0452, lng: 105.7469 },
+            { name: 'Hải Phòng', lat: 20.8449, lng: 106.6881 },
+            { name: 'Bình Dương', lat: 10.9805, lng: 106.6519 },
+          ].map((c) => (
+            <button
+              key={c.name}
+              type="button"
+              onClick={() => handleQuickCity(c.name, c.lat, c.lng)}
+              style={{
+                fontSize: '11px',
+                padding: '2px 8px',
+                borderRadius: '6px',
+                background: locationName.includes(c.name) ? 'rgba(0, 240, 255, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                borderColor: locationName.includes(c.name) ? '#00f0ff' : 'rgba(255, 255, 255, 0.1)',
+                color: locationName.includes(c.name) ? '#00f0ff' : 'var(--ink)',
+                flexShrink: 0,
+              }}
+            >
+              📍 {c.name}
+            </button>
+          ))}
+        </div>
       </div>
 
       {showKeyInput && (
@@ -360,14 +471,35 @@ export const MapModal: React.FC<MapModalProps> = ({
           style={{
             fontSize: '12px',
             color: '#a5f3fc',
-            padding: '5px 8px',
+            padding: '6px 10px',
             marginBottom: '8px',
             borderRadius: '6px',
-            background: 'rgba(0, 240, 255, 0.08)',
+            background: 'rgba(0, 240, 255, 0.1)',
             borderLeft: '3px solid #00f0ff',
+            display: 'flex',
+            justifyContent: 'space-between',
+            alignItems: 'center',
           }}
         >
-          {statusMsg}
+          <span>{statusMsg}</span>
+          {navigatingPlace && (
+            <button
+              type="button"
+              onClick={() => {
+                setNavigatingPlace(null);
+                setStatusMsg('Đã trở lại chế độ xem tổng quan bản đồ.');
+              }}
+              style={{
+                fontSize: '10.5px',
+                padding: '2px 6px',
+                background: 'rgba(255, 255, 255, 0.1)',
+                color: '#fff',
+                border: 'none',
+              }}
+            >
+              Quay lại bản đồ thường
+            </button>
+          )}
         </div>
       )}
 
@@ -376,15 +508,16 @@ export const MapModal: React.FC<MapModalProps> = ({
         style={{
           position: 'relative',
           width: '100%',
-          height: '280px',
+          height: '290px',
           borderRadius: '10px',
           overflow: 'hidden',
-          border: '1px solid rgba(0, 240, 255, 0.25)',
+          border: '1px solid rgba(0, 240, 255, 0.35)',
           marginBottom: '10px',
+          boxShadow: '0 4px 16px rgba(0, 0, 0, 0.4)',
         }}
       >
         <iframe
-          title="Google Maps Station Locator"
+          title="Google Maps Navigation"
           width="100%"
           height="100%"
           style={{ border: 0 }}
@@ -392,12 +525,55 @@ export const MapModal: React.FC<MapModalProps> = ({
           allowFullScreen
           src={mapEmbedUrl}
         />
+
+        {navigatingPlace && (
+          <div
+            style={{
+              position: 'absolute',
+              top: '8px',
+              left: '8px',
+              right: '8px',
+              background: 'rgba(6, 16, 36, 0.92)',
+              border: '1px solid #00f0ff',
+              borderRadius: '8px',
+              padding: '6px 10px',
+              display: 'flex',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              boxShadow: '0 4px 12px rgba(0, 240, 255, 0.3)',
+              zIndex: 10,
+            }}
+          >
+            <div style={{ fontSize: '12px', color: '#fff' }}>
+              🚗 Lộ trình: <b style={{ color: '#00f0ff' }}>{navigatingPlace.name}</b>
+            </div>
+            <a
+              href={`https://www.google.com/maps/dir/?api=1&origin=${currentCoords.lat},${currentCoords.lng}&destination=${encodeURIComponent(
+                navigatingPlace.name + ' ' + navigatingPlace.addr
+              )}`}
+              target="_blank"
+              rel="noopener noreferrer"
+              style={{
+                padding: '3px 8px',
+                background: '#0284c7',
+                color: '#fff',
+                fontSize: '11px',
+                borderRadius: '6px',
+                textDecoration: 'none',
+                fontWeight: 600,
+              }}
+            >
+              Mở App Google Maps ↗
+            </a>
+          </div>
+        )}
       </div>
 
       {/* List of Found Google Places */}
-      <div style={{ maxHeight: '200px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+      <div style={{ maxHeight: '220px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: '6px' }}>
         {placeList.map((place) => {
           const isSelected = selectedPlaceLocal?.pid === place.pid;
+          const isNavigating = navigatingPlace?.pid === place.pid;
           return (
             <div
               key={place.pid}
@@ -405,13 +581,17 @@ export const MapModal: React.FC<MapModalProps> = ({
                 display: 'flex',
                 justifyContent: 'space-between',
                 alignItems: 'center',
-                padding: '8px 12px',
+                padding: '9px 12px',
                 borderRadius: '8px',
-                background: isSelected
-                  ? 'rgba(0, 240, 255, 0.18)'
-                  : 'rgba(6, 16, 36, 0.7)',
-                border: isSelected
+                background: isNavigating
+                  ? 'rgba(0, 240, 255, 0.25)'
+                  : isSelected
+                  ? 'rgba(0, 240, 255, 0.15)'
+                  : 'rgba(6, 16, 36, 0.75)',
+                border: isNavigating
                   ? '1px solid #00f0ff'
+                  : isSelected
+                  ? '1px solid rgba(0, 240, 255, 0.6)'
                   : '1px solid rgba(255, 255, 255, 0.08)',
                 cursor: 'pointer',
                 transition: 'all 0.15s ease',
@@ -422,10 +602,10 @@ export const MapModal: React.FC<MapModalProps> = ({
               }}
             >
               <div style={{ flex: 1, minWidth: 0, marginRight: '10px' }}>
-                <b style={{ color: isSelected ? '#00f0ff' : '#fff', fontSize: '13px', display: 'block' }}>
+                <b style={{ color: isSelected || isNavigating ? '#00f0ff' : '#fff', fontSize: '13px', display: 'block' }}>
                   {mode === 'dealer' ? '🏬' : '⛽'} {place.name}
                 </b>
-                <small style={{ color: 'var(--mut)', fontSize: '11.5px', display: 'block' }}>
+                <small style={{ color: 'var(--mut)', fontSize: '11.5px', display: 'block', marginTop: '2px' }}>
                   {place.addr}
                 </small>
               </div>
@@ -434,7 +614,7 @@ export const MapModal: React.FC<MapModalProps> = ({
                 <button
                   type="button"
                   className={isSelected ? 'pri' : ''}
-                  style={{ fontSize: '11.5px', padding: '4px 8px' }}
+                  style={{ fontSize: '11.5px', padding: '5px 9px' }}
                   onClick={(e) => {
                     e.stopPropagation();
                     setSelectedPlaceLocal(place);
@@ -443,25 +623,30 @@ export const MapModal: React.FC<MapModalProps> = ({
                 >
                   {isSelected ? '✓ Đã chọn' : 'Chọn'}
                 </button>
-                <a
-                  href={`https://www.google.com/maps/dir/?api=1&destination=${place.lat},${place.lng}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleStartDirections(place);
+                  }}
                   style={{
-                    padding: '4px 8px',
+                    padding: '5px 10px',
                     fontSize: '11.5px',
                     borderRadius: '8px',
-                    background: 'rgba(0, 240, 255, 0.1)',
-                    border: '1px solid rgba(0, 240, 255, 0.25)',
-                    color: '#00f0ff',
-                    textDecoration: 'none',
+                    background: isNavigating
+                      ? '#10b981'
+                      : 'linear-gradient(135deg, rgba(0, 240, 255, 0.2) 0%, rgba(2, 132, 199, 0.3) 100%)',
+                    border: isNavigating ? '1px solid #10b981' : '1px solid rgba(0, 240, 255, 0.4)',
+                    color: isNavigating ? '#fff' : '#00f0ff',
+                    fontWeight: 700,
+                    cursor: 'pointer',
                     display: 'flex',
                     alignItems: 'center',
+                    gap: '4px',
                   }}
-                  onClick={(e) => e.stopPropagation()}
                 >
-                  Chỉ đường ↗
-                </a>
+                  🧭 {isNavigating ? 'Đang dẫn đường' : 'Chỉ đường ↗'}
+                </button>
               </div>
             </div>
           );

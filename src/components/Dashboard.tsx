@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Entry, Medal, Part, Vehicle } from '../types';
 import { calculateStats, curOdoOf, levels, money, num, partInfo, pIcon } from '../utils/calc';
 import { detectOemTireSpec, evaluateTireStatus, barToPsi } from '../utils/oemTireSpecs';
+import { LiquidFuelGauge } from './LiquidFuelGauge';
 
 interface DashboardProps {
   currentVehicle: Vehicle | null;
@@ -693,48 +694,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {subModule === 'overview' && (
           <div>
             {currentVehicle.tank ? (
-              <div>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ fontSize: '13px', color: 'var(--mut)' }}>
-                    Nhiên liệu bình chứa (ước tính)
-                  </span>
-                  <b style={{ color: 'var(--acc)', fontFamily: 'monospace' }}>
-                    {fuelPercentage != null
-                      ? `~${Math.round(fuelPercentage)}% (${num(currentFuelLiters || 0)} / ${num(
-                          currentVehicle.tank
-                        )} L)`
-                      : 'Đang chờ dữ liệu lần đổ đầy bình'}
-                  </b>
-                </div>
-
-                <div
-                  className="bar"
-                  style={{
-                    height: '16px',
-                    borderRadius: '8px',
-                    background: 'rgba(5, 15, 35, 0.9)',
-                    border: '1px solid var(--line)',
-                  }}
-                >
-                  <span
-                    style={{
-                      width: `${fuelPercentage || 0}%`,
-                      background:
-                        (fuelPercentage || 0) <= 15
-                          ? '#f43f5e'
-                          : (fuelPercentage || 0) <= 30
-                          ? '#f59e0b'
-                          : 'var(--acc)',
-                    }}
-                  />
-                </div>
-
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: 'var(--mut)', marginTop: '4px' }}>
-                  <span>Trống (0L)</span>
-                  <span>50%</span>
-                  <span>Đầy ({currentVehicle.tank}L)</span>
-                </div>
-              </div>
+              <LiquidFuelGauge
+                vehicleId={currentVehicle.id}
+                vehicleName={currentVehicle.name}
+                tankCapacity={currentVehicle.tank}
+                lastFuelDateFromEntry={
+                  entries
+                    .filter((e) => e.v === currentVehicle.id && e.type === 'fuel')
+                    .sort((a, b) => b.date.localeCompare(a.date))[0]?.date
+                }
+                lastFuelPercentFromEntry={fuelPercentage}
+              />
             ) : (
               <p className="empty" style={{ margin: 0 }}>
                 Chưa nhập dung tích bình xăng của xe. Bạn có thể cập nhật trong mục Cài đặt → Sửa xe.

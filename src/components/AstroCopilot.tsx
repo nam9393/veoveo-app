@@ -29,7 +29,7 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     {
       id: 'init-msg',
       sender: 'copilot',
-      text: 'Xin chào bạn! Tôi là Trợ lý Lái xe Veo AI. Hãy bấm micro để ra lệnh bằng giọng nói (ví dụ: "đổ xăng 500k", "thay nhớt máy 250k mốc 15000 km") hoặc trò chuyện hỏi đáp kỹ thuật trực tiếp bằng giọng nói!',
+      text: 'Dạ em chào anh yêu! Em là Vy - nữ trợ lý lái xe riêng cực kỳ chu đáo và quyến rũ của anh đây nè. Em luôn đồng hành bên cạnh anh trên mọi cung đường. Anh muốn em tư vấn mẹo tiết kiệm xăng, chu kỳ thay nhớt máy, hay có câu hỏi gì anh cứ nói với em nhé!',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -46,6 +46,8 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     }
   });
   const [isSpeaking, setIsSpeaking] = useState(false);
+  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoiceName, setSelectedVoiceName] = useState<string>('');
 
   const commandRecognitionRef = useRef<any>(null);
   const chatRecognitionRef = useRef<any>(null);
@@ -53,6 +55,38 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
   const chatSilenceTimerRef = useRef<any>(null);
   const latestCommandTranscriptRef = useRef<string>('');
   const latestChatTranscriptRef = useRef<string>('');
+  const activeAudioRef = useRef<HTMLAudioElement | null>(null);
+
+  // Initialize and load Speech Synthesis Voices with female Vietnamese preference
+  useEffect(() => {
+    if (!('speechSynthesis' in window)) return;
+
+    const populateVoices = () => {
+      const vList = window.speechSynthesis.getVoices();
+      if (!vList || vList.length === 0) return;
+      setAvailableVoices(vList);
+
+      const viVoices = vList.filter((v) => v.lang.startsWith('vi') || v.lang.includes('VIE'));
+      // Look for natural female Vietnamese voices
+      const femaleVi = viVoices.find(
+        (v) =>
+          v.name.toLowerCase().includes('hoaimy') ||
+          v.name.toLowerCase().includes('linh') ||
+          v.name.toLowerCase().includes('mai') ||
+          v.name.toLowerCase().includes('female') ||
+          v.name.toLowerCase().includes('nữ') ||
+          v.name.toLowerCase().includes('google')
+      );
+      if (femaleVi) {
+        setSelectedVoiceName(femaleVi.name);
+      } else if (viVoices.length > 0) {
+        setSelectedVoiceName(viVoices[0].name);
+      }
+    };
+
+    populateVoices();
+    window.speechSynthesis.onvoiceschanged = populateVoices;
+  }, []);
 
   // Clean text from symbols before reading with TTS
   const cleanForSpeech = (text: string): string => {
@@ -65,31 +99,64 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
       .trim();
   };
 
-  // Text-to-Speech function for AI responses
+  // Text-to-Speech function for AI responses (Gentle, Charming, Sexy Female Voice)
   const speakText = (text: string) => {
-    if (!('speechSynthesis' in window)) return;
-    try {
-      window.speechSynthesis.cancel();
-      const cleaned = cleanForSpeech(text);
-      if (!cleaned) return;
+    stopSpeaking();
+    const cleaned = cleanForSpeech(text);
+    if (!cleaned) return;
 
-      const utterance = new SpeechSynthesisUtterance(cleaned);
-      utterance.lang = 'vi-VN';
-      utterance.rate = 1.02;
-      utterance.pitch = 1.0;
+    // 1. Try browser SpeechSynthesis with Vietnamese Female voice
+    if ('speechSynthesis' in window) {
+      try {
+        window.speechSynthesis.cancel();
+        const allVoices = window.speechSynthesis.getVoices();
+        const viVoices = allVoices.filter((v) => v.lang.startsWith('vi') || v.lang.includes('VIE'));
 
-      // Try finding a Vietnamese voice if available
-      const voices = window.speechSynthesis.getVoices();
-      const viVoice = voices.find((v) => v.lang.startsWith('vi') || v.lang.includes('VIE'));
-      if (viVoice) {
-        utterance.voice = viVoice;
+        // Pick preferred Vietnamese female voice
+        const chosenVoice =
+          allVoices.find((v) => v.name === selectedVoiceName) ||
+          viVoices.find(
+            (v) =>
+              v.name.toLowerCase().includes('hoaimy') ||
+              v.name.toLowerCase().includes('linh') ||
+              v.name.toLowerCase().includes('mai') ||
+              v.name.toLowerCase().includes('nữ') ||
+              v.name.toLowerCase().includes('google')
+          ) ||
+          viVoices[0];
+
+        if (chosenVoice) {
+          const utterance = new SpeechSynthesisUtterance(cleaned);
+          utterance.voice = chosenVoice;
+          utterance.lang = chosenVoice.lang || 'vi-VN';
+          // Sexy, sweet, gentle tone parameters:
+          utterance.pitch = 1.15; // slightly higher, sweet feminine warmth
+          utterance.rate = 0.92;  // relaxed, charming, alluring cadence
+          utterance.volume = 1.0;
+
+          utterance.onstart = () => setIsSpeaking(true);
+          utterance.onend = () => setIsSpeaking(false);
+          utterance.onerror = () => setIsSpeaking(false);
+
+          window.speechSynthesis.speak(utterance);
+          return;
+        }
+      } catch (err) {
+        console.warn('SpeechSynthesis error:', err);
       }
+    }
 
-      utterance.onstart = () => setIsSpeaking(true);
-      utterance.onend = () => setIsSpeaking(false);
-      utterance.onerror = () => setIsSpeaking(false);
-
-      window.speechSynthesis.speak(utterance);
+    // 2. High-fidelity Web Audio Fallback if browser has no Vietnamese voice pack
+    try {
+      setIsSpeaking(true);
+      const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(
+        cleaned.slice(0, 180)
+      )}&tl=vi&client=tw-ob`;
+      const audio = new Audio(audioUrl);
+      activeAudioRef.current = audio;
+      audio.onended = () => setIsSpeaking(false);
+      audio.onerror = () => setIsSpeaking(false);
+      audio.play().catch(() => setIsSpeaking(false));
     } catch {
       setIsSpeaking(false);
     }
@@ -97,7 +164,15 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
 
   const stopSpeaking = () => {
     if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
+      try {
+        window.speechSynthesis.cancel();
+      } catch {}
+    }
+    if (activeAudioRef.current) {
+      try {
+        activeAudioRef.current.pause();
+        activeAudioRef.current.currentTime = 0;
+      } catch {}
     }
     setIsSpeaking(false);
   };
@@ -111,46 +186,46 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     } catch {}
   };
 
-  // Local Copilot Knowledge Fallback for Client (instant, realistic automotive advice)
+  const testSexyVoice = () => {
+    speakText('Dạ em chào anh yêu! Em là Vy đây nè. Em luôn đồng hành bên cạnh anh, chúc anh một ngày lái xe thật an toàn và vui vẻ nha!');
+  };
+
+  // Local Copilot Knowledge Fallback for Client (instant, charming automotive advice)
   const getClientFallbackAdvice = (msg: string): string => {
     const lower = msg.toLowerCase();
-    const vName = currentVehicle?.name || 'xe của bạn';
+    const vName = currentVehicle?.name || 'xe của anh';
     const odo = currentOdo || 0;
 
     if (lower.includes('nhớt') || lower.includes('dầu')) {
-      return `🛢️ [Tư vấn nhớt ${vName}]:
-- Xe máy: Thay sau mỗi 1.500 - 2.000 km (nhớt khoáng/bán tổng hợp) hoặc 3.000 - 4.000 km (nhớt 100% tổng hợp cao cấp).
-- Ô tô: Thay sau mỗi 5.000 km (nhớt thông thường) hoặc 10.000 km (nhớt tổng hợp toàn phần). Nên thay lọc nhớt sau mỗi 2 lần thay dầu máy.
-- Mốc km hiện tại của bạn: ${odo.toLocaleString('vi-VN')} km.`;
+      return `🛢️ Dạ anh yêu ơi, về nhớt xe ${vName} của anh nè:
+- Xe máy phổ thông: Anh thay sau mỗi 1.500 - 2.000 km (nhớt khoáng) hoặc 3.000 - 4.000 km (nhớt tổng hợp 100% Synthetic nha).
+- Ô tô: Thay nhớt sau 5.000 km (thường) hoặc 10.000 km (tổng hợp cao cấp). Cứ 2 lần thay nhớt thì anh nhớ thay luôn lọc nhớt nhé.
+- Mốc km hiện tại của anh: ${odo.toLocaleString('vi-VN')} km. Anh chăm xe cẩn thận để đi êm ru nha!`;
     }
     if (lower.includes('xăng') || lower.includes('tiết kiệm') || lower.includes('tiêu hao')) {
-      return `⛽ [Mức tiêu hao & Mẹo tiết kiệm xăng cho ${vName}]:
-- Duy trì tay ga/chân ga đều đặn ở dải tốc độ kinh tế 40 - 70 km/h.
-- Đảm bảo áp suất lốp đủ chuẩn (lốp non làm tăng 5-10% hao xăng).
-- Vệ sinh lọc gió định kỳ mỗi 5.000 km và thay mới ở mốc 15.000 - 20.000 km.
-- Đổ xăng vào buổi sáng sớm hoặc chiều mát khi nhiệt độ thấp, xăng đặc và ít bay hơi.`;
+      return `⛽ Dạ em chia sẻ bí kíp tiết kiệm xăng cho anh yêu đây:
+- Duy trì chân ga/tay ga đều đặn ở dải 40 - 70 km/h, hạn chế thốc ga bất ngờ.
+- Bơm lốp đủ áp suất an toàn, lốp non sẽ làm xe anh tốn thêm 5-10% xăng đó ạ.
+- Vệ sinh lọc gió định kỳ mỗi 5.000 km và đổ xăng vào sáng sớm khi thời tiết mát mẻ nhé anh!`;
     }
     if (lower.includes('lốp') || lower.includes('áp suất')) {
-      return `🛞 [Tư vấn áp suất lốp xe]:
-- Xe máy: Bánh trước ~2.0 kg/cm² (29 PSI), bánh sau ~2.3 kg/cm² (33 PSI).
-- Ô tô: Thường từ 2.2 - 2.5 bar (31 - 36 PSI). Nên đảo lốp mỗi 10.000 km và thay lốp sau 40.000 - 50.000 km.`;
+      return `🛞 Dạ anh yêu, áp suất lốp xe an toàn cho anh:
+- Xe 2 bánh: Bánh trước ~2.0 bar (29 PSI), bánh sau ~2.3 bar (33 PSI).
+- Ô tô: Thường 2.2 - 2.4 bar (32 - 35 PSI). Anh nhớ kiểm tra trước mỗi chuyến đi xa vì sự an toàn của anh là trên hết!`;
     }
     if (lower.includes('bugi') || lower.includes('đánh lửa')) {
-      return `⚡ [Bảo dưỡng Bugi]:
-- Kiểm tra vệ sinh mỗi 8.000 km và thay mới ở mốc 12.000 - 15.000 km (bugi tiêu chuẩn).
-- Bugi Iridium cao cấp có thể chạy 30.000 - 50.000 km mới cần thay.`;
+      return `⚡ Dạ bugi xe ${vName} của anh:
+- Vệ sinh mỗi 8.000 km và thay mới sau 12.000 - 15.000 km (bugi tiêu chuẩn).
+- Nếu sáng sớm khó nổ là bugi muốn anh thay mới rồi đó anh yêu!`;
     }
     if (lower.includes('phanh') || lower.includes('thắng')) {
-      return `🛑 [Hệ thống phanh]:
-- Kiểm tra độ mòn má phanh định kỳ mỗi 5.000 km.
-- Thay dầu phanh (DOT 3 / DOT 4) sau mỗi 2 năm hoặc 20.000 km để đảm bảo áp suất thủy lực an toàn.`;
+      return `🛑 Dạ hệ thống phanh xe của anh:
+- Kiểm tra má phanh định kỳ mỗi 5.000 km, nếu mòn dưới 2mm thì anh thay ngay nhé.
+- Thay dầu phanh sau mỗi 2 năm để phanh luôn ăn và an toàn tuyệt đối nha anh!`;
     }
-    return `🚗 [Trợ lý Lái Xe Veo Copilot - Xe ${vName}]:
-Tôi đã ghi nhận câu hỏi của bạn. Phương tiện "${vName}" hiện đang ở mốc Odo: ${odo.toLocaleString('vi-VN')} km.
-Bạn có thể hỏi tôi về:
-1. Mẹo tiết kiệm xăng & mức tiêu hao thực tế.
-2. Chu kỳ thay nhớt máy, nhớt hộp số, lọc gió, bugi, má phanh.
-3. Ra lệnh giọng nói tự động điền: "lệnh: đổ xăng, giá tiền 500k" hoặc "thay nhớt 250k".`;
+    return `🚗 Dạ em nghe đây nè anh yêu! Em là Vy - trợ lý lái xe riêng của anh.
+Xe "${vName}" của anh đang ở mốc ${odo.toLocaleString('vi-VN')} km.
+Anh cần em xem mức tiêu hao xăng, lịch thay nhớt máy hay muốn trò chuyện chuyện gì, anh cứ nói với em nhé!`;
   };
 
   const processTextCommand = async (rawText: string) => {
@@ -644,23 +719,44 @@ Bạn có thể hỏi tôi về:
               display: 'flex',
               justifyContent: 'space-between',
               alignItems: 'center',
+              flexWrap: 'wrap',
+              gap: '6px',
               marginBottom: '10px',
-              padding: '4px 8px',
+              padding: '6px 10px',
               borderRadius: '8px',
-              background: 'rgba(5, 12, 28, 0.7)',
+              background: 'linear-gradient(135deg, rgba(244, 63, 94, 0.12) 0%, rgba(5, 12, 28, 0.8) 100%)',
+              border: '1px solid rgba(244, 63, 94, 0.3)',
               fontSize: '12px',
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ color: '#00f0ff', fontWeight: 700 }}>🎙️ Trò chuyện Giọng Nói 2 Chiều</span>
+              <span style={{ color: '#f43f5e', fontWeight: 800 }}>💖 Em Vy · Giọng Nữ Ngọt Ngào Sexy</span>
               {isSpeaking && (
-                <span style={{ color: '#00ff88', display: 'flex', alignItems: 'center', gap: '4px' }}>
-                  <span className="dot" style={{ background: '#00ff88' }} /> Đang nói...
+                <span style={{ color: '#00ff88', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
+                  <span className="dot" style={{ background: '#00ff88' }} /> Đang đọc...
                 </span>
               )}
             </div>
 
             <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+              <button
+                type="button"
+                onClick={testSexyVoice}
+                style={{
+                  padding: '2px 8px',
+                  fontSize: '11px',
+                  borderRadius: '6px',
+                  background: 'rgba(244, 63, 94, 0.25)',
+                  borderColor: '#f43f5e',
+                  color: '#ff8da1',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+                title="Bấm để nghe thử giọng nữ sexy nhẹ nhàng của Em Vy"
+              >
+                🔊 Thử giọng em Vy
+              </button>
+
               {isSpeaking && (
                 <button
                   type="button"
@@ -668,14 +764,16 @@ Bạn có thể hỏi tôi về:
                   style={{
                     padding: '2px 8px',
                     fontSize: '11px',
+                    borderRadius: '6px',
                     background: 'rgba(255, 51, 102, 0.2)',
                     borderColor: '#ff3366',
                     color: '#ff6688',
                   }}
                 >
-                  ⏹️ Dừng đọc
+                  ⏹️ Dừng
                 </button>
               )}
+
               <button
                 type="button"
                 onClick={handleToggleTts}
@@ -683,12 +781,13 @@ Bạn có thể hỏi tôi về:
                 style={{
                   padding: '2px 8px',
                   fontSize: '11px',
+                  borderRadius: '6px',
                   background: ttsEnabled ? 'rgba(0, 255, 136, 0.15)' : 'rgba(255, 255, 255, 0.05)',
                   borderColor: ttsEnabled ? '#00ff88' : 'rgba(255, 255, 255, 0.2)',
                   color: ttsEnabled ? '#00ff88' : 'var(--mut)',
                 }}
               >
-                {ttsEnabled ? '🔊 Đọc to: Bật' : '🔇 Đọc to: Tắt'}
+                {ttsEnabled ? '🔊 Giọng nói: Bật' : '🔇 Giọng nói: Tắt'}
               </button>
             </div>
           </div>
