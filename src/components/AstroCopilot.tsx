@@ -202,18 +202,54 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     }
   };
 
-  // Text-to-Speech function for AI responses (Gentle, Charming, Sexy Female Voice - Em Vy)
+  // Text-to-Speech function for AI responses (Southern Vietnamese Sweet & Charming Voice - Em Vy)
   const speakText = (text: string) => {
     stopSpeaking();
     const cleaned = cleanForSpeech(text);
     if (!cleaned) return;
 
+    // 1. Try High-Quality Natural Vietnamese Female Voice Stream from /api/tts
+    try {
+      const audioUrl = `/api/tts?text=${encodeURIComponent(cleaned.slice(0, 450))}`;
+      const audio = new Audio(audioUrl);
+      activeAudioRef.current = audio;
+
+      audio.onplay = () => {
+        isSpeakingRef.current = true;
+        setIsSpeaking(true);
+      };
+
+      audio.onended = () => {
+        isSpeakingRef.current = false;
+        setIsSpeaking(false);
+        activeAudioRef.current = null;
+      };
+
+      audio.onerror = () => {
+        console.warn('Audio streaming fallback to Web Speech API');
+        activeAudioRef.current = null;
+        fallbackToWebSpeech(cleaned);
+      };
+
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise.catch((e) => {
+          console.warn('Audio play autoplay blocked or failed, fallback to Web Speech:', e);
+          fallbackToWebSpeech(cleaned);
+        });
+      }
+      return;
+    } catch {
+      fallbackToWebSpeech(cleaned);
+    }
+  };
+
+  const fallbackToWebSpeech = (cleaned: string) => {
     if (!('speechSynthesis' in window)) {
       console.warn('Trình duyệt chưa hỗ trợ SpeechSynthesis');
       return;
     }
 
-    // Split text into natural sentence chunks (ends with . ! ? : or newline)
     const sentences = cleaned
       .replace(/([.?!:\n]+)/g, '$1|')
       .split('|')
@@ -245,7 +281,9 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
   };
 
   const testSexyVoice = () => {
-    speakText('Dạ em chào anh yêu! Em là Vy đây nè. Em luôn đồng hành bên cạnh anh, chúc anh một ngày lái xe thật an toàn và vui vẻ nha!');
+    speakText(
+      'Dạ em Vy nghe nè anh yêu ơi! Em là con gái miền Nam dễ thương của anh nè. Em luôn đồng hành bên cạnh anh, chúc anh chạy xe thật êm ru, ngọt xớt và an toàn nghen!'
+    );
   };
 
   // Local Copilot Knowledge Fallback for Client (instant, charming automotive advice)
@@ -788,7 +826,10 @@ Anh cần em xem mức tiêu hao xăng, lịch thay nhớt máy hay muốn trò 
             }}
           >
             <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <span style={{ color: '#f43f5e', fontWeight: 800 }}>💖 Em Vy · Giọng Nữ Ngọt Ngào Sexy</span>
+              <span style={{ color: '#f43f5e', fontWeight: 800 }}>💖 Em Vy · Giọng Gái Miền Nam Ngọt Ngào & Quyến Rũ</span>
+              <span style={{ fontSize: '10px', color: '#ffb3c1', background: 'rgba(244, 63, 94, 0.2)', padding: '1px 5px', borderRadius: '4px' }}>
+                Chuẩn Nam Bộ
+              </span>
               {isSpeaking && (
                 <span style={{ color: '#00ff88', display: 'flex', alignItems: 'center', gap: '4px', fontSize: '11px' }}>
                   <span className="dot" style={{ background: '#00ff88' }} /> Đang đọc...

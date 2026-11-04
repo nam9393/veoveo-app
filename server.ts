@@ -24,61 +24,158 @@ const ai = new GoogleGenAI({
   },
 });
 
-// Intelligent Local Vehicle Expert Fallback Engine (Em Vy - Nữ trợ lý lái xe riêng quyến rũ, ngọt ngào)
+// Intelligent Local Vehicle Expert Fallback Engine (Em Vy - Nữ trợ lý giọng gái miền Nam cực kỳ ngọt ngào, quyến rũ)
 function getLocalCopilotAdvice(message: string, context: any): string {
   const lower = (message || '').toLowerCase();
-  const vName = context?.vehicleName || 'xe';
+  const vName = context?.vehicleName || 'xe cưng';
   const odo = context?.currentOdo || 0;
   const tank = context?.tank ? `${context.tank}L` : 'chưa rõ';
-  const cons = context?.cons ? `${context.cons} L/100km` : 'chưa xác định';
+  const cons = context?.cons ? `${context.cons} L/100km` : 'chưa tính';
 
   if (lower.includes('nhớt') || lower.includes('dầu máy')) {
-    return `🛢️ Dạ anh yêu ơi, về nhớt xe ${vName} của anh nè:
-- Nếu anh đi xe máy phổ thông: Anh nhớ thay sau mỗi 1.500 - 2.000 km (nhớt thường) hoặc 3.000 - 4.000 km (nhớt tổng hợp 100% Synthetic nha anh).
-- Nếu anh lái ô tô: Thay nhớt máy sau 5.000 km (nhớt thường) hoặc 10.000 km (nhớt tổng hợp). Cứ 2 lần thay nhớt thì anh thay luôn cốc lọc nhớt để máy luôn êm ái nhé.
-- Đồng hồ xe anh hiện tại đang là ${odo.toLocaleString('vi-VN')} km. Anh nhớ chăm chút cho xe để em và anh vi vu mượt mà nha!`;
+    return `🛢️ Dạ em Vy nghe nè anh yêu ơi! Về nhớt xe ${vName} của anh nè:
+- Nếu anh chạy xe máy: Tầm 1.500 - 2.000 cây số (nhớt thường) hoặc 3.000 - 4.000 cây số (nhớt tổng hợp xịn sò) là anh nhớ thay cho máy bốc nghen.
+- Nếu anh lái ô tô: Cứ 5.000 km (nhớt thường) hoặc 10.000 km (nhớt tổng hợp) thay một lần, tiện thay luôn cốc lọc nhớt đặng máy chạy êm ru bà rù luôn nha anh!
+- Xe anh giờ đang ${odo.toLocaleString('vi-VN')} km nè. Anh chăm chút xế cưng thì em mới thương anh nhiều nghen!`;
   }
 
   if (lower.includes('xăng') || lower.includes('tiêu thụ') || lower.includes('tiêu hao') || lower.includes('tiết kiệm')) {
-    return `⛽ Dạ em chia sẻ bí kíp tiết kiệm xăng cho anh yêu đây:
-- Xe ${vName} của anh có dung tích bình ${tank}, mức tiêu thụ khoảng ~${cons}.
-- Để tiết kiệm thêm 10 - 15% tiền xăng, anh nhớ:
-  1. Giữ chân ga/tay ga thật đều, tránh thốc ga bất ngờ và phanh gấp liên tục.
-  2. Bơm lốp đủ áp suất chuẩn, lốp non sẽ làm xe anh bị 'uống' thêm xăng đó ạ.
-  3. Đổ xăng vào sáng sớm hoặc chiều mát, lúc đó xăng cô đặc hơn và không bị bay hơi.
-Anh lái xe cẩn thận, em luôn bên cạnh anh nè!`;
+    return `⛽ Dạ em chia sẻ bí kíp tiết kiệm xăng cho anh yêu đây nè:
+- Xe ${vName} của anh bình ${tank}, ăn tầm ~${cons} đó anh.
+- Đặng đỡ hao xăng 10 - 15%, anh nhớ giữ chân ga đều tay, hổng có thốc ga hay phanh gấp nghen.
+- Bơm lốp đủ áp suất chuẩn nhà sản xuất, lốp mà non là xe bị 'uống' xăng dữ lắm á.
+- Đổ xăng sáng sớm hoặc chiều mát cho đặc xăng nghen. Anh chạy cẩn thận, có em luôn bên cạnh anh nè!`;
   }
 
   if (lower.includes('lốp') || lower.includes('áp suất') || lower.includes('vỏ xe')) {
-    return `🛞 Dạ anh yêu, lốp xe là sự an toàn tính mạng của anh đó nha:
-- Xe 2 bánh: Bánh trước bơm 1.8 - 2.0 bar (29 PSI), bánh sau 2.2 - 2.4 bar (33 PSI).
-- Ô tô: Thường từ 2.2 - 2.4 bar (32 - 35 PSI) tùy tải trọng.
-- Cứ mỗi 10.000 km anh đảo lốp một lần nha. Anh an toàn thì em mới an lòng được ạ!`;
+    return `🛞 Dạ anh thương, lốp xe là sinh mạng của anh đó nha:
+- Xe 2 bánh: Bánh trước bơm 1.8 - 2.0 bar (29 PSI), bánh sau 2.2 - 2.4 bar (33 PSI) nghen.
+- Ô tô: Thường 2.2 - 2.4 bar (32 - 35 PSI) tùy tải trọng.
+- Cứ 10.000 km anh nhớ đảo lốp một lần đặng mòn đều nghen. Anh bình an là em vui nhất trần đời luôn á!`;
   }
 
   if (lower.includes('bugi') || lower.includes('đánh lửa')) {
-    return `⚡ Dạ bugi xe ${vName} của anh:
-- Bugi tiêu chuẩn nên vệ sinh mỗi 8.000 km và thay mới sau 12.000 - 15.000 km.
-- Nếu sáng sớm anh thấy xe khó nổ hoặc hụt ga khi tăng tốc là bugi đang 'làm nũng' muốn anh thay mới rồi đó anh yêu!`;
+    return `⚡ Dạ bugi xe ${vName} của anh nè:
+- Cứ 8.000 km vệ sinh một lần, tầm 12.000 - 15.000 km thì thay cái mới cho đánh lửa ngọt xớt nha anh.
+- Sáng sớm đề máy mà thấy ngộp hay hụp ga là em nó đang 'làm nũng' đòi anh thay bugi mới rồi đó!`;
   }
 
   if (lower.includes('phanh') || lower.includes('thắng') || lower.includes('bố thắng')) {
-    return `🛑 Dạ hệ thống phanh xe là quan trọng nhất khi anh đi đường:
-- Anh nhớ liếc nhìn má phanh sau mỗi 5.000 km nha, nếu mòn dưới 2mm thì thay ngay kẻo xước đĩa phanh.
-- Dầu phanh thay sau 2 năm. Anh an toàn trở về nhà là niềm hạnh phúc của em!`;
+    return `🛑 Dạ phanh thắng là cực kỳ quan trọng luôn nha anh:
+- Anh nhớ ngó má phanh sau mỗi 5.000 km, mòn dưới 2mm là thay liền tay kẻo xước đĩa phanh uổng lắm nghen.
+- Dầu phanh tầm 2 năm thay mới một lần. Anh chạy chậm chậm thôi, đừng phóng nhanh em lo đó!`;
   }
 
-  if (lower.includes('bảo dưỡng') || lower.includes('kiểm tra')) {
-    return `🔧 Dạ lịch cưng nựng xe ${vName} ở mốc ${odo.toLocaleString('vi-VN')} km của anh đây:
-- Kiểm tra nhớt máy, nhớt hộp số, vệ sinh lọc gió và xịt sên/tra mỡ.
-- Kiểm tra áp suất lốp và phanh an toàn.
-Có gì băn khoăn anh cứ hỏi em, em phục vụ anh hết mình luôn nè!`;
-  }
-
-  return `🚗 Dạ em nghe đây nè anh yêu! Em là Vy - trợ lý lái xe riêng của anh.
-Xe "${vName}" của anh hiện đang ở mốc Odometer: ${odo.toLocaleString('vi-VN')} km.
-Anh muốn em tư vấn về mức tiêu hao xăng, lịch thay nhớt máy, áp suất lốp an toàn hay có câu hỏi gì về xe, anh cứ nói với em nhé!`;
+  return `🌸 Dạ em Vy chào anh yêu nè! Em luôn túc trực ở ghế phụ để lo cho anh và xế cưng ${vName}. Anh muốn hỏi về xăng cộ, thay nhớt, bảo dưỡng hay bất cứ chuyện gì cứ nói nhỏ vô tai em nghen!`;
 }
+
+// In-Memory TTS Audio Cache (URL-safe string -> Buffer)
+const ttsAudioCache = new Map<string, Buffer>();
+
+// Endpoint: High-Quality Natural Vietnamese Female Voice TTS Audio Stream
+app.get('/api/tts', async (req, res) => {
+  try {
+    const rawText = String(req.query.text || '').trim();
+    if (!rawText) {
+      res.status(400).send('Text parameter is required');
+      return;
+    }
+
+    // Clean text for speech
+    const cleanText = rawText
+      .replace(/[#*_`~>•-]/g, ' ')
+      .replace(/\[.*?\]/g, '')
+      .replace(/\(.*?\)/g, '')
+      .replace(/https?:\/\/\S+/g, '')
+      .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}]/gu, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    if (!cleanText) {
+      res.status(400).send('Clean text is empty');
+      return;
+    }
+
+    const cacheKey = cleanText.slice(0, 300);
+    if (ttsAudioCache.has(cacheKey)) {
+      const cached = ttsAudioCache.get(cacheKey)!;
+      res.setHeader('Content-Type', 'audio/mpeg');
+      res.setHeader('Content-Length', cached.length);
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      res.end(cached);
+      return;
+    }
+
+    // Split text into chunks <= 160 chars along punctuation boundaries
+    const sentences = cleanText.match(/[^.!?,\n]+[.!?,\n]*/g) || [cleanText];
+    const chunks: string[] = [];
+    let cur = '';
+
+    for (const s of sentences) {
+      const trimmed = s.trim();
+      if (!trimmed) continue;
+      if ((cur + ' ' + trimmed).trim().length <= 160) {
+        cur = (cur + ' ' + trimmed).trim();
+      } else {
+        if (cur) chunks.push(cur);
+        if (trimmed.length > 160) {
+          // Slice very long sentence
+          const words = trimmed.split(' ');
+          let sub = '';
+          for (const w of words) {
+            if ((sub + ' ' + w).trim().length <= 160) {
+              sub = (sub + ' ' + w).trim();
+            } else {
+              if (sub) chunks.push(sub);
+              sub = w;
+            }
+          }
+          if (sub) cur = sub;
+          else cur = '';
+        } else {
+          cur = trimmed;
+        }
+      }
+    }
+    if (cur) chunks.push(cur);
+
+    const buffers: Buffer[] = [];
+    for (const chunk of chunks.slice(0, 10)) { // limit max 10 chunks to avoid timeout
+      const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=vi&client=tw-ob`;
+      const ttsRes = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+          'Referer': 'https://translate.google.com/',
+        },
+      });
+      if (ttsRes.ok) {
+        const ab = await ttsRes.arrayBuffer();
+        buffers.push(Buffer.from(ab));
+      }
+    }
+
+    if (buffers.length === 0) {
+      res.status(502).send('Failed to synthesize speech');
+      return;
+    }
+
+    const combined = Buffer.concat(buffers);
+    // Cache result (up to 100 items)
+    if (ttsAudioCache.size > 100) {
+      const firstKey = ttsAudioCache.keys().next().value;
+      if (firstKey) ttsAudioCache.delete(firstKey);
+    }
+    ttsAudioCache.set(cacheKey, combined);
+
+    res.setHeader('Content-Type', 'audio/mpeg');
+    res.setHeader('Content-Length', combined.length);
+    res.setHeader('Cache-Control', 'public, max-age=86400');
+    res.end(combined);
+  } catch (err: any) {
+    console.warn('TTS streaming error:', err.message);
+    res.status(500).send('TTS error: ' + err.message);
+  }
+});
 
 // Endpoint: Parse voice or text command into structured Vehicle Log Entry
 app.post('/api/gemini/parse-command', async (req, res) => {
@@ -179,12 +276,14 @@ app.post('/api/gemini/chat', async (req, res) => {
     }
 
     const contextStr = context ? JSON.stringify(context) : 'Chưa có thông tin xe.';
-    const prompt = `Bạn là Vy (Em Vy) - Nữ trợ lý lái xe riêng cực kỳ ngọt ngào, dịu dàng, nũng nịu, quyến rũ, sexy và chu đáo của anh chủ xe trong ứng dụng Veo App.
-Cách xưng hô và phong cách:
-- Luôn luôn xưng "Em" và gọi người dùng là "Anh", "Anh yêu", hoặc "Anh tài".
-- Giọng điệu ấm áp, ân cần, ngọt ngào, sexy và tình cảm, luôn quan tâm nhắc nhở anh lái xe an toàn, giữ gìn sức khỏe và cưng nựng chiếc xe của anh.
-- Kiến thức kỹ thuật xe (tiêu hao xăng, nhớt máy, lốp xe, phụ tùng, phanh, bugi) phải chuẩn xác 100%, thực tế, ngắn gọn, súc tích (khoảng 2-4 câu hoặc gạch đầu dòng rõ ràng).
-- Tuyệt đối không dùng từ ngữ robot hay phi thuyền không gian viễn tưởng. Hãy nói như một cô bạn gái thông minh, gợi cảm, am hiểu xe cộ đang ngồi bên ghế phụ đồng hành cùng anh.
+    const prompt = `Bạn là Vy (Em Vy) - Nữ trợ lý lái xe riêng của anh chủ xe trong ứng dụng Veo App.
+Đặc trưng tính cách và giọng điệu:
+- GIỌNG CON GÁI MIỀN NAM (Nam Bộ) cực kỳ ngọt ngào, dịu dàng, nũng nịu, quyến rũ, sexy, tình cảm và chu đáo.
+- Cách xưng hô: Luôn xưng "Em" hoặc "Em Vy", gọi người dùng là "Anh", "Anh yêu", "Anh thương", "Anh hai".
+- Ngôn ngữ và từ ngữ Nam Bộ tự nhiên, quyến rũ:
+  + Dùng các từ cảm thán, trợ từ Nam Bộ duyên dáng: "dạ nè", "nghen anh", "hén anh", "hổng có sao đâu nè", "thiệt tình á", "em coi giùm anh nghen", "chạy ngọt xớt luôn", "êm ru bà rù", "uống xăng dữ dằn", "lo cho anh muốn xỉu", "đặng đi cho khỏe".
+  + Không dùng các từ ngữ thô cứng, tuyệt đối không xưng hô robot. Hãy nói như một cô người yêu/em gái miền Nam xinh đẹp, quyến rũ, cực kỳ sành xe cộ đang ngồi cạnh ghế phụ thủ thỉ bên tai anh.
+- Kiến thức kỹ thuật ô tô, xe máy (tiêu hao xăng, nhớt máy, lốp xe, phụ tùng, phanh, bugi) phải chuẩn xác 100%, thực tế, súc tích (khoảng 2-4 câu ngắn dễ nghe và dễ đọc qua âm thanh).
 
 Dữ liệu phương tiện và thông số hiện tại:
 ${contextStr}
