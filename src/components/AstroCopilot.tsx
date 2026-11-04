@@ -99,70 +99,19 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
       .trim();
   };
 
-  // Text-to-Speech function for AI responses (Gentle, Charming, Sexy Female Voice)
-  const speakText = (text: string) => {
-    stopSpeaking();
-    const cleaned = cleanForSpeech(text);
-    if (!cleaned) return;
+  const ttsKeepAliveTimerRef = useRef<any>(null);
+  const speechQueueRef = useRef<string[]>([]);
+  const isSpeakingRef = useRef<boolean>(false);
 
-    // 1. Try browser SpeechSynthesis with Vietnamese Female voice
-    if ('speechSynthesis' in window) {
-      try {
-        window.speechSynthesis.cancel();
-        const allVoices = window.speechSynthesis.getVoices();
-        const viVoices = allVoices.filter((v) => v.lang.startsWith('vi') || v.lang.includes('VIE'));
-
-        // Pick preferred Vietnamese female voice
-        const chosenVoice =
-          allVoices.find((v) => v.name === selectedVoiceName) ||
-          viVoices.find(
-            (v) =>
-              v.name.toLowerCase().includes('hoaimy') ||
-              v.name.toLowerCase().includes('linh') ||
-              v.name.toLowerCase().includes('mai') ||
-              v.name.toLowerCase().includes('nữ') ||
-              v.name.toLowerCase().includes('google')
-          ) ||
-          viVoices[0];
-
-        if (chosenVoice) {
-          const utterance = new SpeechSynthesisUtterance(cleaned);
-          utterance.voice = chosenVoice;
-          utterance.lang = chosenVoice.lang || 'vi-VN';
-          // Sexy, sweet, gentle tone parameters:
-          utterance.pitch = 1.15; // slightly higher, sweet feminine warmth
-          utterance.rate = 0.92;  // relaxed, charming, alluring cadence
-          utterance.volume = 1.0;
-
-          utterance.onstart = () => setIsSpeaking(true);
-          utterance.onend = () => setIsSpeaking(false);
-          utterance.onerror = () => setIsSpeaking(false);
-
-          window.speechSynthesis.speak(utterance);
-          return;
-        }
-      } catch (err) {
-        console.warn('SpeechSynthesis error:', err);
-      }
-    }
-
-    // 2. High-fidelity Web Audio Fallback if browser has no Vietnamese voice pack
-    try {
-      setIsSpeaking(true);
-      const audioUrl = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(
-        cleaned.slice(0, 180)
-      )}&tl=vi&client=tw-ob`;
-      const audio = new Audio(audioUrl);
-      activeAudioRef.current = audio;
-      audio.onended = () => setIsSpeaking(false);
-      audio.onerror = () => setIsSpeaking(false);
-      audio.play().catch(() => setIsSpeaking(false));
-    } catch {
-      setIsSpeaking(false);
-    }
-  };
-
+  // Stop speaking and clear speech queue
   const stopSpeaking = () => {
+    if (ttsKeepAliveTimerRef.current) {
+      clearInterval(ttsKeepAliveTimerRef.current);
+      ttsKeepAliveTimerRef.current = null;
+    }
+    speechQueueRef.current = [];
+    isSpeakingRef.current = false;
+    setIsSpeaking(false);
     if ('speechSynthesis' in window) {
       try {
         window.speechSynthesis.cancel();
@@ -174,7 +123,116 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
         activeAudioRef.current.currentTime = 0;
       } catch {}
     }
-    setIsSpeaking(false);
+  };
+
+  // Speak next chunk in queue sequentially to bypass 15s browser cut-off
+  const speakNextInQueue = () => {
+    if (!('speechSynthesis' in window)) return;
+    if (speechQueueRef.current.length === 0) {
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      if (ttsKeepAliveTimerRef.current) {
+        clearInterval(ttsKeepAliveTimerRef.current);
+        ttsKeepAliveTimerRef.current = null;
+      }
+      return;
+    }
+
+    const chunk = speechQueueRef.current.shift();
+    if (!chunk || !chunk.trim()) {
+      speakNextInQueue();
+      return;
+    }
+
+    try {
+      // Unfreeze browser speech engine
+      window.speechSynthesis.resume();
+
+      const utterance = new SpeechSynthesisUtterance(chunk.trim());
+      utterance.lang = 'vi-VN';
+      utterance.pitch = 1.15; // Sweet, charming feminine warmth
+      utterance.rate = 0.95;  // Relaxed, pleasant cadence
+      utterance.volume = 1.0;
+
+      const allVoices = window.speechSynthesis.getVoices();
+      const viVoices = allVoices.filter((v) => v.lang.startsWith('vi') || v.lang.includes('VIE'));
+      const chosenVoice =
+        allVoices.find((v) => v.name === selectedVoiceName) ||
+        viVoices.find(
+          (v) =>
+            v.name.toLowerCase().includes('hoaimy') ||
+            v.name.toLowerCase().includes('linh') ||
+            v.name.toLowerCase().includes('mai') ||
+            v.name.toLowerCase().includes('nữ') ||
+            v.name.toLowerCase().includes('google')
+        ) ||
+        viVoices[0];
+
+      if (chosenVoice) {
+        utterance.voice = chosenVoice;
+      }
+
+      utterance.onstart = () => {
+        isSpeakingRef.current = true;
+        setIsSpeaking(true);
+      };
+
+      utterance.onend = () => {
+        speakNextInQueue();
+      };
+
+      utterance.onerror = () => {
+        speakNextInQueue();
+      };
+
+      // Heartbeat to prevent Chromium 15s speech freeze
+      if (!ttsKeepAliveTimerRef.current) {
+        ttsKeepAliveTimerRef.current = setInterval(() => {
+          if (window.speechSynthesis && window.speechSynthesis.speaking) {
+            window.speechSynthesis.pause();
+            window.speechSynthesis.resume();
+          }
+        }, 5000);
+      }
+
+      window.speechSynthesis.speak(utterance);
+    } catch (err) {
+      console.warn('SpeechSynthesis error:', err);
+      speakNextInQueue();
+    }
+  };
+
+  // Text-to-Speech function for AI responses (Gentle, Charming, Sexy Female Voice - Em Vy)
+  const speakText = (text: string) => {
+    stopSpeaking();
+    const cleaned = cleanForSpeech(text);
+    if (!cleaned) return;
+
+    if (!('speechSynthesis' in window)) {
+      console.warn('Trình duyệt chưa hỗ trợ SpeechSynthesis');
+      return;
+    }
+
+    // Split text into natural sentence chunks (ends with . ! ? : or newline)
+    const sentences = cleaned
+      .replace(/([.?!:\n]+)/g, '$1|')
+      .split('|')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    speechQueueRef.current = sentences.length > 0 ? sentences : [cleaned];
+    isSpeakingRef.current = true;
+    setIsSpeaking(true);
+
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+      setTimeout(() => {
+        speakNextInQueue();
+      }, 50);
+    } catch {
+      speakNextInQueue();
+    }
   };
 
   const handleToggleTts = () => {

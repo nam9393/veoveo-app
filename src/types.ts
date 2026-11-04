@@ -19,6 +19,8 @@ export interface TirePressureSpec {
   rearPsi: number;
   recommendationNote: string;
   wheelCount: 2 | 4;
+  modelTitle?: string;
+  category?: VehicleCategory;
 }
 
 export interface Vehicle {

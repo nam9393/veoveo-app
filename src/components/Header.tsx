@@ -61,17 +61,6 @@ export const Header: React.FC<HeaderProps> = ({
           </select>
         )}
 
-        <select
-          id="per"
-          aria-label="Khoảng thời gian"
-          value={period}
-          onChange={(e) => onSelectPeriod(e.target.value)}
-        >
-          <option value="month">Tháng này</option>
-          <option value="90">90 ngày</option>
-          <option value="year">Năm nay</option>
-          <option value="all">Tất cả</option>
-        </select>
 
         <button
           ref={soundBtnRef}
