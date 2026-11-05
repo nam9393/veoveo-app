@@ -90,6 +90,7 @@ export interface BackgroundConfig {
   data: string;
   op: number;
   theme?: string;
+  autoDayNight?: boolean;
 }
 
 export interface Medal {

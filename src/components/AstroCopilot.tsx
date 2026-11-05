@@ -29,7 +29,7 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     {
       id: 'init-msg',
       sender: 'copilot',
-      text: 'Dạ em chào anh yêu! Em là Vy - nữ trợ lý lái xe riêng cực kỳ chu đáo và quyến rũ của anh đây nè. Em luôn đồng hành bên cạnh anh trên mọi cung đường. Anh muốn em tư vấn mẹo tiết kiệm xăng, chu kỳ thay nhớt máy, hay có câu hỏi gì anh cứ nói với em nhé!',
+      text: 'Dạ nè anh yêu ơi! Em là Vy nè, nữ trợ lý riêng cực kỳ ngọt ngào và chu đáo của anh đây nè. Xe cộ có em ngó giùm, máy móc êm ru bà rù, chạy ngọt xớt nghen anh thương! Anh muốn em chỉ mẹo tiết kiệm xăng, chu kỳ thay nhớt máy hay có chuyện gì cứ nói nhỏ vô tai em nha!',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -282,7 +282,7 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
 
   const testSexyVoice = () => {
     speakText(
-      'Dạ em Vy nghe nè anh yêu ơi! Em là con gái miền Nam dễ thương của anh nè. Em luôn đồng hành bên cạnh anh, chúc anh chạy xe thật êm ru, ngọt xớt và an toàn nghen!'
+      'Dạ nè anh yêu ơi! Em là Vy nè, em lo cho anh xỉu lên xỉu xuống luôn nè. Xe cộ có em ngó giùm, máy móc êm ru bà rù, chạy ngọt xớt nghen anh thương!'
     );
   };
 
@@ -851,9 +851,9 @@ Anh cần em xem mức tiêu hao xăng, lịch thay nhớt máy hay muốn trò 
                   fontWeight: 600,
                   cursor: 'pointer',
                 }}
-                title="Bấm để nghe thử giọng nữ sexy nhẹ nhàng của Em Vy"
+                title="Bấm để nghe thử giọng nữ chuẩn Nam Bộ của Em Vy"
               >
-                🔊 Thử giọng em Vy
+                🔊 Thử đọc
               </button>
 
               {isSpeaking && (

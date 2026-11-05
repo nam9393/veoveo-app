@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserAccount, AppState } from '../types';
 import { uploadToGoogleDrive, downloadFromGoogleDrive } from '../utils/googleDriveSync';
-import { connectGoogleDrive, uploadDrive, pullDrive } from '../utils/sync';
+import { connectGoogleDrive, uploadDrive, pullDrive, fetchGoogleUserProfile } from '../utils/sync';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -12,6 +12,7 @@ interface AuthModalProps {
   onRestoreState: (state: AppState) => void;
   syncStatus: string;
   onUpdateSyncStatus: (status: string) => void;
+  isLocked?: boolean;
 }
 
 export const AuthModal: React.FC<AuthModalProps> = ({
@@ -23,6 +24,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
   onRestoreState,
   syncStatus,
   onUpdateSyncStatus,
+  isLocked = false,
 }) => {
   const [tab, setTab] = useState<'login' | 'register'>('login');
   const [name, setName] = useState('');
@@ -55,12 +57,17 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         () => appState
       );
 
-      // Successfully authorized Google
+      // Fetch authentic Google user profile details
+      let profile = await fetchGoogleUserProfile();
+      const realName = profile?.name || name || 'Tài khoản Google';
+      const realEmail = profile?.email || email || 'google.user@gmail.com';
+      const realAvatar = profile?.avatar || '🚗';
+
       const googleUser: UserAccount = {
         id: `usr-g-${Date.now()}`,
-        email: email || 'user@gmail.com',
-        name: name || 'Tài xế Google',
-        avatar: '🚗',
+        email: realEmail,
+        name: realName,
+        avatar: realAvatar,
         provider: 'google',
         createdAt: new Date().toISOString(),
         lastSync: new Date().toLocaleTimeString('vi-VN'),
@@ -70,34 +77,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       if (remember) {
         localStorage.setItem('veo_user_account', JSON.stringify(googleUser));
         localStorage.setItem('soxe_gd', '1');
+      } else {
+        sessionStorage.setItem('veo_user_account', JSON.stringify(googleUser));
       }
 
       onUserChange(googleUser);
-      setNotice({ msg: 'Đăng nhập Google thành công! Tự động đồng bộ Google Drive đã kích hoạt.', type: 'success' });
+      setNotice({ msg: `Chào mừng ${realName}! Tự động đồng bộ Google Drive đã kích hoạt.`, type: 'success' });
       setTimeout(() => {
         onClose();
       }, 1200);
     } catch (err: any) {
       console.error('Google Sign In error:', err);
-      // Fallback local sign in with Google identity preset
-      const fallbackUser: UserAccount = {
-        id: `usr-g-${Date.now()}`,
-        email: 'google.driver@gmail.com',
-        name: 'Chủ xe Google',
-        avatar: '🚘',
-        provider: 'google',
-        createdAt: new Date().toISOString(),
-        lastSync: new Date().toLocaleTimeString('vi-VN'),
-        remember,
-      };
-      if (remember) {
-        localStorage.setItem('veo_user_account', JSON.stringify(fallbackUser));
-      }
-      onUserChange(fallbackUser);
-      setNotice({ msg: 'Đã lưu tài khoản Google! Dữ liệu sẽ tự động đồng bộ.', type: 'success' });
-      setTimeout(() => {
-        onClose();
-      }, 1000);
+      // Let user know clearly if sign in had an issue
+      setNotice({
+        msg: `Chưa đăng nhập được Google: ${err?.message || 'Vui lòng bấm lại hoặc nhập tài khoản bên dưới'}`,
+        type: 'error',
+      });
     } finally {
       setIsSyncing(false);
     }
@@ -212,7 +207,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         justifyContent: 'center',
         padding: '16px',
       }}
-      onClick={onClose}
+      onClick={isLocked ? undefined : onClose}
     >
       <div
         className="card"
@@ -231,20 +226,22 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           <h2 style={{ margin: 0, fontSize: '17px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '8px' }}>
             🔐 {currentUser ? 'Tài khoản & Đồng bộ Đám mây' : 'Đăng nhập / Tạo tài khoản'}
           </h2>
-          <button
-            type="button"
-            onClick={onClose}
-            style={{
-              background: 'transparent',
-              border: 'none',
-              color: 'var(--mut)',
-              fontSize: '18px',
-              cursor: 'pointer',
-              padding: '4px 8px',
-            }}
-          >
-            ✕
-          </button>
+          {!isLocked && (
+            <button
+              type="button"
+              onClick={onClose}
+              style={{
+                background: 'transparent',
+                border: 'none',
+                color: 'var(--mut)',
+                fontSize: '18px',
+                cursor: 'pointer',
+                padding: '4px 8px',
+              }}
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Notice alert */}

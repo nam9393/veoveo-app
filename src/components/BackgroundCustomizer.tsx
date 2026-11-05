@@ -1,4 +1,4 @@
-import React, { useRef, useState } from 'react';
+import React, { useRef, useState, useEffect } from 'react';
 import { BackgroundConfig } from '../types';
 import { PRESET_BACKGROUNDS, COCKPIT_THEMES } from '../constants';
 
@@ -14,8 +14,32 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
   const [msg, setMsg] = useState('Nền và màu đèn taplo được lưu trên thiết bị của bạn.');
   const fileInputRef = useRef<HTMLInputElement>(null);
 
+  // Current real-time hour check
+  const [currentHour, setCurrentHour] = useState(new Date().getHours());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentHour(new Date().getHours());
+    }, 60000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const isNightTime = currentHour < 6 || currentHour >= 18;
+  const isAutoEnabled = bgConfig.autoDayNight !== false; // default true
+
   const svgUrl = (svgStr: string) =>
     'data:image/svg+xml,' + encodeURIComponent(svgStr);
+
+  const handleToggleAutoDayNight = (enabled: boolean) => {
+    onChangeBg({
+      ...bgConfig,
+      autoDayNight: enabled,
+    });
+    setMsg(
+      enabled
+        ? `Đã bật chế độ Ngày/Đêm tự động! Hệ thống đang kích hoạt chế độ ${isNightTime ? 'Ban đêm (Ánh sáng ấm chống mỏi mắt)' : 'Ban ngày (Sáng rõ)'}.`
+        : 'Đã tắt chế độ Ngày/Đêm tự động. Bạn có thể chọn theme thủ công.'
+    );
+  };
 
   const handleSelectPreset = (id: string) => {
     const p = PRESET_BACKGROUNDS.find((x) => x.id === id);
@@ -25,6 +49,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
       data: '',
       op: bgConfig.op,
       theme: p?.theme || bgConfig.theme || 'amber',
+      autoDayNight: false, // user manually picked a preset
     });
     setMsg(`Đã đổi nền taplo: ${p?.name || id} (Màu đèn tự động đồng bộ)`);
   };
@@ -33,6 +58,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
     onChangeBg({
       ...bgConfig,
       theme: themeKey,
+      autoDayNight: false, // user manually picked a theme
     });
     setMsg(`Đã chuyển màu đèn taplo: ${COCKPIT_THEMES[themeKey]?.name}`);
   };
@@ -44,6 +70,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
       data: '',
       op: bgConfig.op,
       theme: bgConfig.theme || 'amber',
+      autoDayNight: false,
     });
     setMsg('Đã chuyển về nền tối giản nguyên bản.');
   };
@@ -71,6 +98,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
             data: dataUrl,
             op: bgConfig.op,
             theme: bgConfig.theme || 'amber',
+            autoDayNight: false,
           });
           setMsg('Đã cập nhật ảnh nền thực tế từ thiết bị của bạn!');
         } catch {
@@ -106,10 +134,62 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
         <h2>🎨 Giao diện nền taplo & Màu đèn nội thất (Chống mỏi mắt)</h2>
       </summary>
 
+      {/* Auto Real-Time Day / Night Theme Banner */}
+      <div
+        style={{
+          padding: '12px',
+          borderRadius: '12px',
+          background: isNightTime
+            ? 'linear-gradient(135deg, rgba(245, 158, 11, 0.15) 0%, rgba(18, 14, 10, 0.85) 100%)'
+            : 'linear-gradient(135deg, rgba(56, 189, 248, 0.15) 0%, rgba(11, 19, 36, 0.85) 100%)',
+          border: `1.5px solid ${isNightTime ? 'rgba(245, 158, 11, 0.35)' : 'rgba(56, 189, 248, 0.35)'}`,
+          marginBottom: '14px',
+        }}
+      >
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+          <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '20px' }}>{isNightTime ? '🌙' : '☀️'}</span>
+              <strong style={{ fontSize: '13.5px', color: '#f8fafc' }}>
+                Tự động đổi Theme theo thời gian thực (Ngày / Đêm)
+              </strong>
+            </div>
+            <div style={{ fontSize: '11.5px', color: 'var(--mut)', marginTop: '3px' }}>
+              Thời gian hiện tại: <b>{new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}</b> ·{' '}
+              {isNightTime ? (
+                <span style={{ color: '#fbbf24', fontWeight: 600 }}>Ban đêm (18h-6h): Tự động chuyển Hổ phách BMW chống mỏi mắt</span>
+              ) : (
+                <span style={{ color: '#38bdf8', fontWeight: 600 }}>Ban ngày (6h-18h): Tự động chuyển Thép Titan sáng rõ</span>
+              )}
+            </div>
+          </div>
+
+          <label
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              cursor: 'pointer',
+              fontSize: '12.5px',
+              fontWeight: 700,
+              color: isAutoEnabled ? (isNightTime ? '#fbbf24' : '#38bdf8') : 'var(--mut)',
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isAutoEnabled}
+              onChange={(e) => handleToggleAutoDayNight(e.target.checked)}
+              style={{ width: '18px', height: '18px', accentColor: isNightTime ? '#f59e0b' : '#38bdf8' }}
+            />
+            <span>{isAutoEnabled ? '✓ Đang kích hoạt tự động' : 'Tự động Ngày/Đêm'}</span>
+          </label>
+        </div>
+      </div>
+
       {/* Preset Wallpaper Selector */}
       <div style={{ marginBottom: '14px' }}>
         <small style={{ color: 'var(--mut)', fontSize: '11px', textTransform: 'uppercase', display: 'block', marginBottom: '8px' }}>
-          Chọn hình nền khoang lái & hành trình
+          Chọn hình nền khoang lái & hành trình (Bấm để xem và áp dụng trực tiếp)
         </small>
         <div id="bgs" className="mgrid" style={{ gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))' }}>
           {PRESET_BACKGROUNDS.map((p) => {
@@ -122,11 +202,15 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
                 data-bg={p.id}
                 style={{
                   background: `linear-gradient(rgba(0,0,0,0.3), rgba(0,0,0,0.8)), url('${svgUrl(p.svg)}') center/cover`,
-                  minHeight: '74px',
+                  minHeight: '76px',
                   display: 'flex',
                   flexDirection: 'column',
                   justifyContent: 'flex-end',
-                  borderWidth: isSelected ? '2px' : '1px',
+                  border: isSelected ? '2.5px solid var(--acc)' : '1px solid rgba(255, 255, 255, 0.15)',
+                  boxShadow: isSelected ? '0 0 14px var(--acc-glow)' : 'none',
+                  cursor: 'pointer',
+                  borderRadius: '10px',
+                  padding: '8px',
                 }}
                 aria-label={p.name}
                 onClick={() => handleSelectPreset(p.id)}
@@ -147,7 +231,7 @@ export const BackgroundCustomizer: React.FC<BackgroundCustomizerProps> = ({
           <small style={{ color: 'var(--mut)', fontSize: '11px', textTransform: 'uppercase', fontWeight: 700 }}>
             💡 Đèn viền nội thất (Ambient Light) · Chống mỏi mắt
           </small>
-          <span style={{ fontSize: '10.5px', color: '#10b981' }}>● Không còn ánh neon gắt</span>
+          <span style={{ fontSize: '10.5px', color: '#10b981' }}>● Triệt tiêu ánh sáng xanh ban đêm</span>
         </div>
 
         <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(130px, 1fr))', gap: '8px' }}>

@@ -69,13 +69,13 @@ function getLocalCopilotAdvice(message: string, context: any): string {
   return `🌸 Dạ em Vy chào anh yêu nè! Em luôn túc trực ở ghế phụ để lo cho anh và xế cưng ${vName}. Anh muốn hỏi về xăng cộ, thay nhớt, bảo dưỡng hay bất cứ chuyện gì cứ nói nhỏ vô tai em nghen!`;
 }
 
-// In-Memory TTS Audio Cache (URL-safe string -> Buffer)
-const ttsAudioCache = new Map<string, Buffer>();
+// In-Memory TTS Audio Cache (URL-safe string -> { buffer: Buffer; mimeType: string })
+const ttsAudioCache = new Map<string, { buffer: Buffer; mimeType: string }>();
 
 // Endpoint: High-Quality Natural Vietnamese Female Voice TTS Audio Stream
-app.get('/api/tts', async (req, res) => {
+const handleTts = async (req: express.Request, res: express.Response) => {
   try {
-    const rawText = String(req.query.text || '').trim();
+    const rawText = String(req.body?.text || req.query.text || '').trim();
     if (!rawText) {
       res.status(400).send('Text parameter is required');
       return;
@@ -99,14 +99,60 @@ app.get('/api/tts', async (req, res) => {
     const cacheKey = cleanText.slice(0, 300);
     if (ttsAudioCache.has(cacheKey)) {
       const cached = ttsAudioCache.get(cacheKey)!;
-      res.setHeader('Content-Type', 'audio/mpeg');
-      res.setHeader('Content-Length', cached.length);
+      res.setHeader('Content-Type', cached.mimeType);
+      res.setHeader('Content-Length', cached.buffer.length);
       res.setHeader('Cache-Control', 'public, max-age=86400');
-      res.end(cached);
+      res.end(cached.buffer);
       return;
     }
 
-    // Split text into chunks <= 160 chars along punctuation boundaries
+    // 1. Try Gemini 3.8 Flash Lite TTS (Highest quality sweet female voice)
+    try {
+      const geminiResponse = await ai.models.generateContent({
+        model: 'gemini-3.8-flash-lite-tts',
+        contents: [
+          {
+            role: 'user',
+            parts: [
+              {
+                text: cleanText.slice(0, 300),
+                speechMetadata: {
+                  style: 'Sweet, charming, gentle and affectionate Southern Vietnamese young woman',
+                },
+              },
+            ],
+          },
+        ],
+        config: {
+          responseModalities: ['AUDIO'],
+          speechConfig: {
+            voiceConfig: {
+              prebuiltVoiceConfig: { voiceName: 'Kore' },
+            },
+          },
+        },
+      });
+
+      const base64Audio = geminiResponse.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
+      if (base64Audio) {
+        const wavBuffer = Buffer.from(base64Audio, 'base64');
+        if (ttsAudioCache.size > 100) {
+          const firstKey = ttsAudioCache.keys().next().value;
+          if (firstKey) ttsAudioCache.delete(firstKey);
+        }
+        ttsAudioCache.set(cacheKey, { buffer: wavBuffer, mimeType: 'audio/wav' });
+
+        res.setHeader('Content-Type', 'audio/wav');
+        res.setHeader('Content-Length', wavBuffer.length);
+        res.setHeader('Cache-Control', 'public, max-age=86400');
+        res.end(wavBuffer);
+        return;
+      }
+    } catch (gErr: any) {
+      // Fallback to high-speed stream synthesis
+    }
+
+    // 2. High-speed synthesized speech fallback
     const sentences = cleanText.match(/[^.!?,\n]+[.!?,\n]*/g) || [cleanText];
     const chunks: string[] = [];
     let cur = '';
@@ -119,7 +165,6 @@ app.get('/api/tts', async (req, res) => {
       } else {
         if (cur) chunks.push(cur);
         if (trimmed.length > 160) {
-          // Slice very long sentence
           const words = trimmed.split(' ');
           let sub = '';
           for (const w of words) {
@@ -140,7 +185,7 @@ app.get('/api/tts', async (req, res) => {
     if (cur) chunks.push(cur);
 
     const buffers: Buffer[] = [];
-    for (const chunk of chunks.slice(0, 10)) { // limit max 10 chunks to avoid timeout
+    for (const chunk of chunks.slice(0, 10)) {
       const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=vi&client=tw-ob`;
       const ttsRes = await fetch(url, {
         headers: {
@@ -160,12 +205,11 @@ app.get('/api/tts', async (req, res) => {
     }
 
     const combined = Buffer.concat(buffers);
-    // Cache result (up to 100 items)
     if (ttsAudioCache.size > 100) {
       const firstKey = ttsAudioCache.keys().next().value;
       if (firstKey) ttsAudioCache.delete(firstKey);
     }
-    ttsAudioCache.set(cacheKey, combined);
+    ttsAudioCache.set(cacheKey, { buffer: combined, mimeType: 'audio/mpeg' });
 
     res.setHeader('Content-Type', 'audio/mpeg');
     res.setHeader('Content-Length', combined.length);
@@ -175,7 +219,10 @@ app.get('/api/tts', async (req, res) => {
     console.warn('TTS streaming error:', err.message);
     res.status(500).send('TTS error: ' + err.message);
   }
-});
+};
+
+app.get('/api/tts', handleTts);
+app.post('/api/tts', handleTts);
 
 // Endpoint: Parse voice or text command into structured Vehicle Log Entry
 app.post('/api/gemini/parse-command', async (req, res) => {

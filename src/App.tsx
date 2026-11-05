@@ -22,6 +22,7 @@ import { AuthModal } from './components/AuthModal';
 import { PRESET_BACKGROUNDS, COCKPIT_THEMES } from './constants';
 import { ParsedCommand } from './utils/voiceParser';
 import { startLofiMusic, toggleLofiMusic, isLofiPlaying } from './utils/lofiAudio';
+import { checkAndNotifyMaintenance } from './services/notificationService';
 
 // First-time users start with clean slate (no forced default Toyota Vios)
 const defaultAppState: AppState = {
@@ -226,6 +227,58 @@ export function App() {
 
   const currentVehicle = state.vehicles.find((v) => v.id === state.cur) || null;
   const currentOdo = currentVehicle ? curOdoOf(currentVehicle.id, state.vehicles, state.entries) : 0;
+
+  // Automated Day / Night Theme Switcher based on real-time hour (06:00 - 18:00 Day vs 18:00 - 06:00 Night)
+  useEffect(() => {
+    if (bgConfig.autoDayNight === false) return;
+
+    const checkAndApplyDayNight = () => {
+      const h = new Date().getHours();
+      const isNight = h < 6 || h >= 18;
+      const targetPreset = isNight ? 'luxury-cabin' : 'highway-drive';
+      const targetTheme = isNight ? 'amber' : 'titanium';
+
+      if (bgConfig.id !== targetPreset || bgConfig.theme !== targetTheme) {
+        setBgConfig((prev) => {
+          if (prev.autoDayNight === false) return prev;
+          return {
+            ...prev,
+            mode: 'preset',
+            id: targetPreset,
+            theme: targetTheme,
+          };
+        });
+      }
+    };
+
+    checkAndApplyDayNight();
+    const interval = setInterval(checkAndApplyDayNight, 60000);
+    return () => clearInterval(interval);
+  }, [bgConfig.autoDayNight, bgConfig.id, bgConfig.theme]);
+
+  // Automated Maintenance & Part Overdue Push Notification check
+  useEffect(() => {
+    if (!currentVehicle) return;
+    const vehicleParts = state.parts.filter((p) => p.v === currentVehicle.id);
+    for (const part of vehicleParts) {
+      if (!part.km) continue;
+      const dueKm = (part.odo || 0) + part.km;
+      const isOverdue = currentOdo >= dueKm;
+      const isNear = dueKm - currentOdo <= 300;
+      if (isOverdue || isNear) {
+        checkAndNotifyMaintenance(
+          {
+            name: part.name,
+            dueKm,
+            currentKm: currentOdo,
+            isOverdue,
+          },
+          currentVehicle.name
+        );
+        break;
+      }
+    }
+  }, [currentOdo, currentVehicle, state.parts]);
 
   // Ensure current vehicle is valid
   useEffect(() => {
@@ -446,8 +499,64 @@ export function App() {
     setActiveNav('entry');
   };
 
+  // Strict Privacy & Authentication Lock:
+  // When logged out or not yet authenticated, lock the cockpit and only display login/register UI
+  if (!currentUser) {
+    return (
+      <>
+        <div
+          id="cockpit-bg-layer"
+          aria-hidden="true"
+          style={{
+            position: 'fixed',
+            inset: 0,
+            zIndex: 0,
+            backgroundImage: bgImageUrl,
+            backgroundPosition: 'center',
+            backgroundSize: 'cover',
+            backgroundRepeat: 'no-repeat',
+            opacity: bgConfig.mode === 'none' ? 0 : bgConfig.op / 100,
+            pointerEvents: 'none',
+            transition: 'opacity 0.4s ease, background-image 0.4s ease',
+          }}
+        />
+        <div className="bg-canvas" aria-hidden="true" />
+        <AuthModal
+          isOpen={true}
+          isLocked={true}
+          onClose={() => {}}
+          currentUser={null}
+          onUserChange={(usr) => {
+            setCurrentUser(usr);
+            setAuthModalOpen(false);
+          }}
+          appState={state}
+          onRestoreState={(newState) => updateStateAndPersist(() => newState)}
+          syncStatus={syncStatus}
+          onUpdateSyncStatus={setSyncStatus}
+        />
+      </>
+    );
+  }
+
   return (
     <>
+      <div
+        id="cockpit-bg-layer"
+        aria-hidden="true"
+        style={{
+          position: 'fixed',
+          inset: 0,
+          zIndex: 0,
+          backgroundImage: bgImageUrl,
+          backgroundPosition: 'center',
+          backgroundSize: 'cover',
+          backgroundRepeat: 'no-repeat',
+          opacity: bgConfig.mode === 'none' ? 0 : bgConfig.op / 100,
+          pointerEvents: 'none',
+          transition: 'opacity 0.4s ease, background-image 0.4s ease',
+        }}
+      />
       <div className="bg-canvas" aria-hidden="true" />
       <main id="app">
         <Header

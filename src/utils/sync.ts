@@ -27,7 +27,7 @@ export function saveClientId(id: string) {
 
 const tokenOk = () => !!tok && Date.now() < tokExp - 60000;
 
-function getToken(): Promise<string> {
+export function getToken(): Promise<string> {
   return new Promise((res, rej) => {
     if (tokenOk() && tok) return res(tok);
     if (!tc) return rej('nogsi');
@@ -48,6 +48,49 @@ function getToken(): Promise<string> {
     };
     tc.requestAccessToken({ prompt: '' });
   });
+}
+
+/**
+ * Retrieves the authentic name, email, and avatar of the logged in Google account
+ */
+export async function fetchGoogleUserProfile(accessToken?: string): Promise<{ name?: string; email?: string; avatar?: string } | null> {
+  try {
+    const token = accessToken || (await getToken());
+    if (!token) return null;
+
+    // 1. Google Drive About API (guaranteed to succeed with drive.appdata scope)
+    try {
+      const driveRes = await fetch('https://www.googleapis.com/drive/v3/about?fields=user', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (driveRes.ok) {
+        const d = await driveRes.json();
+        if (d && d.user) {
+          return {
+            name: d.user.displayName || undefined,
+            email: d.user.emailAddress || undefined,
+            avatar: d.user.photoLink || undefined,
+          };
+        }
+      }
+    } catch {}
+
+    // 2. Fallback to oauth2 userinfo
+    try {
+      const uRes = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      if (uRes.ok) {
+        const u = await uRes.json();
+        return {
+          name: u.name || u.given_name,
+          email: u.email,
+          avatar: u.picture,
+        };
+      }
+    } catch {}
+  } catch {}
+  return null;
 }
 
 async function gd(url: string, opt: RequestInit = {}): Promise<Response> {

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { num } from '../utils/calc';
 import { gpsTrackingService, GpsRoute, GpsTelemetryStatus } from '../services/gpsTrackingService';
+import { checkAndNotifyFuel, notifyGpsLost } from '../services/notificationService';
 
 interface LiquidFuelGaugeProps {
   vehicleId: string;
@@ -139,6 +140,11 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
   const burnedPercent = tankCapacity ? (burnedLiters / tankCapacity) * 100 : 0;
   const currentPercentage = Math.max(0, Math.min(100, initialPercent - burnedPercent));
   const currentLiters = tankCapacity ? (currentPercentage / 100) * tankCapacity : 0;
+
+  // Web Push notification check for critical/warning fuel levels
+  useEffect(() => {
+    checkAndNotifyFuel(currentPercentage, vehicleName);
+  }, [currentPercentage, vehicleName]);
 
   // Slosh Trigger with Sound & Touch Ripples
   const triggerSlosh = (e?: React.MouseEvent | React.TouchEvent) => {
