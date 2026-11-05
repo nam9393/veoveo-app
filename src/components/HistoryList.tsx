@@ -3,6 +3,8 @@ import { Entry, EntryType, Vehicle } from '../types';
 import { ENTRY_TYPES, FUEL_TYPES } from '../constants';
 import { fmtD, levels, money, num } from '../utils/calc';
 import { triggerSkidEffect } from '../utils/sound';
+import { RouteMiniMap } from './RouteMiniMap';
+import { gpsTrackingService } from '../services/gpsTrackingService';
 
 interface HistoryListProps {
   currentVehicle: Vehicle | null;
@@ -23,6 +25,8 @@ export const HistoryList: React.FC<HistoryListProps> = ({
 }) => {
   const [filter, setFilter] = useState<string>('all');
   const [openKeys, setOpenKeys] = useState<Set<string>>(new Set());
+  const [expandedMapEntryId, setExpandedMapEntryId] = useState<string | null>(null);
+  const [showMasterMap, setShowMasterMap] = useState<boolean>(false);
 
   if (!currentVehicle) return null;
 
@@ -38,6 +42,11 @@ export const HistoryList: React.FC<HistoryListProps> = ({
       else next.add(k);
       return next;
     });
+  };
+
+  const toggleEntryMap = (entryId: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setExpandedMapEntryId((prev) => (prev === entryId ? null : entryId));
   };
 
   const LV = levels(currentVehicle.id, vehicles, entries);
@@ -65,26 +74,65 @@ export const HistoryList: React.FC<HistoryListProps> = ({
     ['income', '💰 Thu nhập'],
   ];
 
+  const recentTraveledRoutes = gpsTrackingService.getTraveledRoutes(currentVehicle.id);
+  const latestRoute = recentTraveledRoutes[0];
+
   return (
     <details className="card fold" id="hd" open>
-      <summary>
-        <h2>🕘 Lịch sử</h2>
+      <summary style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+        <h2>🕘 Lịch sử & Nhật ký hành trình</h2>
       </summary>
 
-      <div className="tabs" id="hf">
-        {filterTabs.map(([val, label]) => (
+      {/* Filter Tabs & Master Map Toggle */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px', marginBottom: '10px' }}>
+        <div className="tabs" id="hf" style={{ margin: 0 }}>
+          {filterTabs.map(([val, label]) => (
+            <button
+              key={val}
+              type="button"
+              data-hf={val}
+              aria-pressed={val === filter}
+              className={val === filter ? 'active' : ''}
+              onClick={(e) => handleFilterClick(val, e)}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+
+        {/* Button to toggle master GPS route overview */}
+        {latestRoute && (
           <button
-            key={val}
             type="button"
-            data-hf={val}
-            aria-pressed={val === filter}
-            className={val === filter ? 'active' : ''}
-            onClick={(e) => handleFilterClick(val, e)}
+            onClick={() => setShowMasterMap((prev) => !prev)}
+            style={{
+              padding: '6px 12px',
+              borderRadius: '8px',
+              background: showMasterMap ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+              border: `1.5px solid ${showMasterMap ? '#38bdf8' : 'rgba(255, 255, 255, 0.15)'}`,
+              color: showMasterMap ? '#38bdf8' : '#f8fafc',
+              fontSize: '11.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}
           >
-            {label}
+            <span>🗺️ {showMasterMap ? 'Ẩn bản đồ GPS' : 'Xem bản đồ GPS lộ trình'}</span>
           </button>
-        ))}
+        )}
       </div>
+
+      {/* Master GPS Map View at Top of History */}
+      {showMasterMap && latestRoute && (
+        <div style={{ marginBottom: '16px' }}>
+          <div style={{ fontSize: '12px', color: '#38bdf8', fontWeight: 700, marginBottom: '6px' }}>
+            🛰️ Tuyến đường xe vừa di chuyển (Tọa độ GPS Polyline trực quan):
+          </div>
+          <RouteMiniMap route={latestRoute} compact={false} />
+        </div>
+      )}
 
       <div id="list">
         {Object.keys(years).length === 0 ? (
@@ -201,6 +249,7 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                           {monthEntries.map((e) => {
                             const T = ENTRY_TYPES[e.type];
                             const isInc = e.type === 'income';
+                            const isMapOpen = expandedMapEntryId === e.id;
                             const subParts: string[] = [
                               fmtD(e.date),
                               e.odo ? `${e.odo.toLocaleString('vi-VN')} km` : '',
@@ -229,46 +278,104 @@ export const HistoryList: React.FC<HistoryListProps> = ({
                             }
 
                             const sub = subParts.filter(Boolean).join(' · ');
+                            const entryRoute = gpsTrackingService.getRouteForEntry(
+                              currentVehicle.id,
+                              e.id,
+                              e.date,
+                              e.place?.name
+                            );
 
                             return (
-                              <div key={e.id} className="item">
-                                <span
-                                  className="tag"
-                                  style={{ background: `var(${T.varColor})` }}
-                                />
-                                <div className="t">
-                                  <b>
-                                    {T.icon} {e.note || T.label}
-                                  </b>
-                                  <small>
-                                    {T.label} · {sub}
-                                  </small>
+                              <div
+                                key={e.id}
+                                style={{
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  borderBottom: '1px solid rgba(255, 255, 255, 0.05)',
+                                  padding: '4px 0',
+                                }}
+                              >
+                                <div
+                                  className="item"
+                                  onClick={() => toggleEntryMap(e.id)}
+                                  style={{
+                                    cursor: 'pointer',
+                                    borderRadius: '8px',
+                                    padding: '8px 6px',
+                                    transition: 'background 0.2s ease',
+                                    background: isMapOpen ? 'rgba(56, 189, 248, 0.08)' : 'transparent',
+                                  }}
+                                  title="Nhấp vào mục này để xem bản đồ nhỏ tọa độ GPS Polyline"
+                                >
+                                  <span
+                                    className="tag"
+                                    style={{ background: `var(${T.varColor})` }}
+                                  />
+                                  <div className="t">
+                                    <b style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                      <span>{T.icon} {e.note || T.label}</span>
+                                      <span
+                                        style={{
+                                          fontSize: '10px',
+                                          padding: '1px 5px',
+                                          borderRadius: '4px',
+                                          background: isMapOpen ? '#0284c7' : 'rgba(255, 255, 255, 0.08)',
+                                          color: isMapOpen ? '#fff' : 'var(--mut)',
+                                          fontWeight: 600,
+                                        }}
+                                      >
+                                        🗺️ {isMapOpen ? 'Đóng bản đồ' : 'Bản đồ GPS'}
+                                      </span>
+                                    </b>
+                                    <small>
+                                      {T.label} · {sub}
+                                    </small>
+                                  </div>
+                                  <span
+                                    className="amt"
+                                    style={{ color: `var(${T.varColor})` }}
+                                  >
+                                    {isInc ? '+' : '−'}
+                                    {money(e.amount)}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    className="lnk"
+                                    data-edit={e.id}
+                                    aria-label="Sửa khoản này"
+                                    onClick={(ev) => {
+                                      ev.stopPropagation();
+                                      onEditEntry(e);
+                                    }}
+                                  >
+                                    Sửa
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="lnk"
+                                    data-del={e.id}
+                                    aria-label="Xóa khoản này"
+                                    onClick={(ev) => {
+                                      ev.stopPropagation();
+                                      onDeleteEntry(e.id);
+                                    }}
+                                  >
+                                    Xóa
+                                  </button>
                                 </div>
-                                <span
-                                  className="amt"
-                                  style={{ color: `var(${T.varColor})` }}
-                                >
-                                  {isInc ? '+' : '−'}
-                                  {money(e.amount)}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="lnk"
-                                  data-edit={e.id}
-                                  aria-label="Sửa khoản này"
-                                  onClick={() => onEditEntry(e)}
-                                >
-                                  Sửa
-                                </button>
-                                <button
-                                  type="button"
-                                  className="lnk"
-                                  data-del={e.id}
-                                  aria-label="Xóa khoản này"
-                                  onClick={() => onDeleteEntry(e.id)}
-                                >
-                                  Xóa
-                                </button>
+
+                                {/* INLINE MINI-MAP DIRECTLY INSIDE THIS ENTRY ITEM */}
+                                {isMapOpen && (
+                                  <div
+                                    style={{
+                                      padding: '0 8px 10px',
+                                      animation: 'fadeIn 0.25s ease',
+                                    }}
+                                    onClick={(ev) => ev.stopPropagation()}
+                                  >
+                                    <RouteMiniMap route={entryRoute} compact={true} />
+                                  </div>
+                                )}
                               </div>
                             );
                           })}

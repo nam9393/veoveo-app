@@ -109,3 +109,29 @@ export interface PartInfo {
   remK: number | null;
   dueDate: Date | null;
 }
+
+export interface UserAccount {
+  id: string;
+  email: string;
+  name: string;
+  avatar?: string;
+  provider: 'google' | 'local';
+  createdAt: string;
+  lastSync?: string;
+  remember?: boolean;
+}
+
+export interface GpsTrip {
+  id: string;
+  vehicleId: string;
+  startTime: string; // ISO timestamp
+  endTime: string; // ISO timestamp
+  distanceKm: number;
+  startAddr: string;
+  endAddr: string;
+  litersUsed: number;
+  durationMins?: number;
+  avgSpeedKmh?: number;
+  waypoints?: Array<{ lat: number; lng: number; time: string; speedKmh?: number }>;
+}
+

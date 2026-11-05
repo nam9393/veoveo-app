@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { AppState, BackgroundConfig, Entry, Part, Vehicle } from './types';
+import { AppState, BackgroundConfig, Entry, Part, Vehicle, UserAccount } from './types';
 import { calculateMedals, curOdoOf } from './utils/calc';
 import {
   connectGoogleDrive,
@@ -18,85 +18,17 @@ import { MedalsSection } from './components/MedalsSection';
 import { BackgroundCustomizer } from './components/BackgroundCustomizer';
 import { DataManager } from './components/DataManager';
 import { AstroCopilot } from './components/AstroCopilot';
+import { AuthModal } from './components/AuthModal';
 import { PRESET_BACKGROUNDS, COCKPIT_THEMES } from './constants';
 import { ParsedCommand } from './utils/voiceParser';
+import { startLofiMusic, toggleLofiMusic, isLofiPlaying } from './utils/lofiAudio';
 
-const starterVehicle: Vehicle = {
-  id: 'veh-demo-1',
-  name: 'Toyota Vios 1.5G',
-  brand: 'Toyota',
-  category: 'car',
-  plate: '30K-888.68',
-  tank: 42,
-  cons: 5.8,
-  odo: 12500,
-  u: 1,
-  currentTirePressures: {
-    front: 2.2,
-    rear: 2.2,
-    fl: 2.2,
-    fr: 2.2,
-    rl: 2.2,
-    rr: 2.2,
-  },
-};
-
-const starterEntries: Entry[] = [
-  {
-    id: 'ent-demo-1',
-    v: 'veh-demo-1',
-    date: new Date(Date.now() - 3 * 86400000).toISOString().slice(0, 10),
-    type: 'fuel',
-    odo: 12450,
-    amount: 850000,
-    liters: 36,
-    price: 23610,
-    full: true,
-    ft: 'ron95',
-    note: 'Đổ đầy xăng RON95 tại cây Petrolimex',
-    u: 1,
-  },
-  {
-    id: 'ent-demo-2',
-    v: 'veh-demo-1',
-    date: new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10),
-    type: 'service',
-    odo: 10000,
-    amount: 680000,
-    part: 'Nhớt máy',
-    note: 'Thay nhớt máy và kiểm tra định kỳ 10.000km',
-    u: 2,
-  },
-];
-
+// First-time users start with clean slate (no forced default Toyota Vios)
 const defaultAppState: AppState = {
-  vehicles: [starterVehicle],
-  entries: starterEntries,
-  parts: [
-    {
-      id: 'part-demo-1',
-      v: 'veh-demo-1',
-      name: 'Nhớt máy',
-      km: 5000,
-      mo: 6,
-      odo: 10000,
-      date: new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10),
-      pct: 50,
-      u: 1,
-    },
-    {
-      id: 'part-demo-2',
-      v: 'veh-demo-1',
-      name: 'Lọc gió động cơ',
-      km: 10000,
-      mo: 12,
-      odo: 10000,
-      date: new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10),
-      pct: 75,
-      u: 2,
-    },
-  ],
-  cur: 'veh-demo-1',
+  vehicles: [],
+  entries: [],
+  parts: [],
+  cur: null,
   tomb: {},
 };
 
@@ -107,22 +39,35 @@ export function App() {
       if (r) {
         const p = JSON.parse(r);
         if (p && Array.isArray(p.vehicles) && Array.isArray(p.entries)) {
-          // If user deleted the demo vehicle, respect tomb
-          const tomb = p.tomb || {};
-          if (p.vehicles.length === 0 && !tomb['veh-demo-1']) {
-            return defaultAppState;
-          }
           return {
             vehicles: p.vehicles,
             entries: p.entries,
             parts: p.parts || [],
             cur: p.cur || (p.vehicles[0] ? p.vehicles[0].id : null),
-            tomb,
+            tomb: p.tomb || {},
           };
         }
       }
     } catch {}
     return defaultAppState;
+  });
+
+  // User Account & Authentication with Google / Local Login & Remember Me
+  const [currentUser, setCurrentUser] = useState<UserAccount | null>(() => {
+    try {
+      const saved = localStorage.getItem('veo_user_account') || sessionStorage.getItem('veo_user_account');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return null;
+  });
+
+  // On first launch if user is not logged in, prompt AuthModal
+  const [authModalOpen, setAuthModalOpen] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('veo_user_account');
+      if (!saved) return true;
+    } catch {}
+    return false;
   });
 
   const [period, setPeriod] = useState<string>('month');
@@ -133,6 +78,43 @@ export function App() {
       return true;
     }
   });
+
+  // Lofi Chill Instrumental Music state
+  const [lofiActive, setLofiActive] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem('veo_lofi_enabled') === '1';
+    } catch {
+      return false;
+    }
+  });
+
+  // Start relaxing Lo-Fi chill instrumental background music on first user interaction
+  useEffect(() => {
+    const handleFirstGesture = () => {
+      try {
+        const pref = localStorage.getItem('veo_lofi_enabled');
+        if (pref !== '0') {
+          const started = startLofiMusic();
+          if (started) setLofiActive(true);
+        }
+      } catch {}
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
+    };
+
+    window.addEventListener('pointerdown', handleFirstGesture, { once: true });
+    window.addEventListener('keydown', handleFirstGesture, { once: true });
+
+    return () => {
+      window.removeEventListener('pointerdown', handleFirstGesture);
+      window.removeEventListener('keydown', handleFirstGesture);
+    };
+  }, []);
+
+  const handleToggleLofi = () => {
+    const next = toggleLofiMusic();
+    setLofiActive(next);
+  };
 
   const [bgConfig, setBgConfig] = useState<BackgroundConfig>(() => {
     const def: BackgroundConfig = { mode: 'preset', id: 'luxury-cabin', data: '', op: 45, theme: 'bronze' };
@@ -204,7 +186,7 @@ export function App() {
     } catch {}
   }, [bgConfig, bgImageUrl]);
 
-  // Persist state & schedule Drive sync
+  // Persist state & schedule Google Drive auto-sync
   const updateStateAndPersist = (updater: (prev: AppState) => AppState) => {
     setState((prev) => {
       const next = updater(prev);
@@ -253,57 +235,65 @@ export function App() {
         cur: prev.vehicles[0].id,
       }));
     }
-  }, [state.vehicles.length, currentVehicle]);
+  }, [state.vehicles, currentVehicle]);
+
+  // Medals calculation
+  const medals = useMemo(() => {
+    return calculateMedals(state, bgConfig.mode);
+  }, [state, bgConfig.mode]);
 
   // Vehicle actions
-  const handleSaveVehicle = (veh: Vehicle, isEdit: boolean) => {
+  const handleSelectVehicle = (id: string) => {
+    playWarpSound(soundEnabled);
+    updateStateAndPersist((prev) => ({
+      ...prev,
+      cur: id,
+    }));
+  };
+
+  const handleSaveVehicle = (vehicle: Vehicle) => {
     updateStateAndPersist((prev) => {
+      const idx = prev.vehicles.findIndex((v) => v.id === vehicle.id);
       let vehicles = [...prev.vehicles];
-      if (isEdit) {
-        vehicles = vehicles.map((v) => (v.id === veh.id ? veh : v));
+      if (idx >= 0) {
+        vehicles[idx] = vehicle;
       } else {
-        vehicles.push(veh);
+        vehicles.push(vehicle);
       }
       return {
         ...prev,
         vehicles,
-        cur: veh.id,
+        cur: vehicle.id,
       };
     });
     setVehicleModalOpen(false);
     setEditingVehicle(null);
   };
 
-  const handleDeleteVehicle = () => {
-    if (!currentVehicle) return;
-    const delId = currentVehicle.id;
-    const tt = Date.now();
-
+  const handleDeleteVehicle = (vehicleId: string) => {
     updateStateAndPersist((prev) => {
-      const tomb = { ...prev.tomb, [delId]: tt };
-      const parts = prev.parts.filter((p) => {
-        if (p.v === delId) {
-          tomb[p.id] = tt;
-          return false;
-        }
-        return true;
-      });
-      const entries = prev.entries.filter((e) => {
-        if (e.v === delId) {
-          tomb[e.id] = tt;
-          return false;
-        }
-        return true;
-      });
-      const vehicles = prev.vehicles.filter((v) => v.id !== delId);
-      const cur = vehicles[0] ? vehicles[0].id : null;
+      const nextVehicles = prev.vehicles.filter((v) => v.id !== vehicleId);
+      const nextEntries = prev.entries.filter((e) => e.v !== vehicleId);
+      const nextParts = prev.parts.filter((p) => p.v !== vehicleId);
+      const tomb = { ...prev.tomb, [vehicleId]: Date.now() };
+
+      prev.entries
+        .filter((e) => e.v === vehicleId)
+        .forEach((e) => {
+          tomb[e.id] = Date.now();
+        });
+
+      prev.parts
+        .filter((p) => p.v === vehicleId)
+        .forEach((p) => {
+          tomb[p.id] = Date.now();
+        });
 
       return {
-        ...prev,
-        vehicles,
-        entries,
-        parts,
-        cur,
+        vehicles: nextVehicles,
+        entries: nextEntries,
+        parts: nextParts,
+        cur: nextVehicles[0] ? nextVehicles[0].id : null,
         tomb,
       };
     });
@@ -312,43 +302,17 @@ export function App() {
   // Entry actions
   const handleSaveEntry = (entry: Entry, isEdit: boolean) => {
     updateStateAndPersist((prev) => {
+      const idx = prev.entries.findIndex((e) => e.id === entry.id);
       let entries = [...prev.entries];
-      if (isEdit) {
-        entries = entries.map((e) => (e.id === entry.id ? entry : e));
+      if (idx >= 0) {
+        entries[idx] = entry;
       } else {
         entries.push(entry);
       }
 
-      // Update vehicle odo if entry odo is higher
-      const vehicles = prev.vehicles.map((v) => {
-        if (v.id === entry.v && entry.odo > (v.odo || 0)) {
-          return { ...v, odo: entry.odo, u: Date.now() };
-        }
-        return v;
-      });
-
-      // Update part if service entry links to part
-      let parts = [...prev.parts];
-      if (entry.part) {
-        parts = parts.map((p) => {
-          if (p.id === entry.part) {
-            return {
-              ...p,
-              odo: entry.odo || p.odo,
-              date: entry.date,
-              pct: 100,
-              u: Date.now(),
-            };
-          }
-          return p;
-        });
-      }
-
       return {
         ...prev,
-        vehicles,
         entries,
-        parts,
       };
     });
 
@@ -482,231 +446,291 @@ export function App() {
     setActiveNav('entry');
   };
 
-  const medals = calculateMedals(state, bgConfig.mode);
-
   return (
     <>
-      {/* Real-time Dynamic Cockpit Background Layer */}
-      <div
-        id="app-wallpaper-layer"
-        aria-hidden="true"
-        className="fixed inset-0 pointer-events-none transition-all duration-500 ease-out"
-        style={{
-          zIndex: 0,
-          backgroundImage: bgImageUrl,
-          backgroundSize: 'cover',
-          backgroundPosition: 'center center',
-          backgroundRepeat: 'no-repeat',
-          opacity: bgConfig.mode === 'none' ? 0 : Math.max(0.12, bgConfig.op / 100),
-        }}
-      />
-      {/* Eye-friendly Ambient Cockpit Vignette */}
-      <div
-        aria-hidden="true"
-        className="fixed inset-0 pointer-events-none"
-        style={{
-          zIndex: 0,
-          background:
-            'radial-gradient(ellipse at 50% 30%, rgba(6, 11, 24, 0.1) 20%, rgba(4, 7, 15, 0.76) 100%)',
-        }}
-      />
-
-      <main style={{ position: 'relative', zIndex: 1 }}>
+      <div className="bg-canvas" aria-hidden="true" />
+      <main id="app">
         <Header
-        vehicles={state.vehicles}
-        currentVehicleId={state.cur}
-        onSelectVehicle={(id) => updateStateAndPersist((prev) => ({ ...prev, cur: id }))}
-        period={period}
-        onSelectPeriod={setPeriod}
-        syncStatus={syncStatus}
-        soundEnabled={soundEnabled}
-        onToggleSound={handleToggleSound}
-      />
-
-      {/* Astro Copilot AI & Voice Radar Bar */}
-      {state.vehicles.length > 0 && (
-        <AstroCopilot
-          currentVehicle={currentVehicle}
-          currentOdo={currentOdo}
+          vehicles={state.vehicles}
+          currentVehicleId={state.cur}
+          onSelectVehicle={handleSelectVehicle}
+          period={period}
+          onSelectPeriod={setPeriod}
+          syncStatus={syncStatus}
           soundEnabled={soundEnabled}
-          onApplyCommand={handleApplyVoiceOrAICommand}
+          onToggleSound={handleToggleSound}
+          currentUser={currentUser}
+          onOpenAuth={() => setAuthModalOpen(true)}
+          lofiPlaying={lofiActive}
+          onToggleLofi={handleToggleLofi}
         />
-      )}
 
-      {/* Cockpit HUD Navigation Deck */}
-      {state.vehicles.length > 0 && (
-        <div className="hud-nav">
-          <button
-            type="button"
-            className={`hud-nav-item ${activeNav === 'dashboard' ? 'active' : ''}`}
-            onClick={() => handleNavSwitch('dashboard')}
+        {/* Empty Garage Onboarding for First Time Users */}
+        {state.vehicles.length === 0 && (
+          <div
+            className="card"
+            style={{
+              padding: '24px 20px',
+              textAlign: 'center',
+              marginTop: '16px',
+              background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%)',
+              border: '1.5px solid rgba(56, 189, 248, 0.3)',
+              boxShadow: '0 12px 40px rgba(0, 0, 0, 0.6)',
+            }}
           >
-            🚗 Tổng Quan
-          </button>
-          <button
-            type="button"
-            className={`hud-nav-item ${activeNav === 'entry' ? 'active' : ''}`}
-            onClick={() => handleNavSwitch('entry')}
-          >
-            ⚡ Ghi Nhận
-          </button>
-          <button
-            type="button"
-            className={`hud-nav-item ${activeNav === 'history' ? 'active' : ''}`}
-            onClick={() => handleNavSwitch('history')}
-          >
-            📜 Nhật Ký
-          </button>
-          <button
-            type="button"
-            className={`hud-nav-item ${activeNav === 'parts' ? 'active' : ''}`}
-            onClick={() => handleNavSwitch('parts')}
-          >
-            🔧 Linh Kiện
-          </button>
-          <button
-            type="button"
-            className={`hud-nav-item ${activeNav === 'charts' ? 'active' : ''}`}
-            onClick={() => handleNavSwitch('charts')}
-          >
-            📊 Biểu Đồ
-          </button>
-          <button
-            type="button"
-            className={`hud-nav-item ${activeNav === 'medals' ? 'active' : ''}`}
-            onClick={() => handleNavSwitch('medals')}
-          >
-            🏅 Danh Hiệu
-          </button>
-          <button
-            type="button"
-            className={`hud-nav-item ${activeNav === 'system' ? 'active' : ''}`}
-            onClick={() => handleNavSwitch('system')}
-          >
-            ⚙️ Cài Đặt
-          </button>
-        </div>
-      )}
+            <div style={{ fontSize: '42px', marginBottom: '10px' }}>🚘</div>
+            <h2 style={{ fontSize: '18px', color: '#f8fafc', justifyContent: 'center', marginBottom: '8px' }}>
+              Chào mừng bạn đến với Veo Sổ Xe Thông Minh!
+            </h2>
+            <p style={{ color: 'var(--mut)', fontSize: '13px', maxWidth: '520px', margin: '0 auto 18px', lineHeight: 1.6 }}>
+              Bắt đầu theo dõi nhật ký phương tiện của bạn: kiểm soát tiêu thụ xăng chuẩn xác theo GPS, theo dõi áp suất lốp theo khuyến nghị hãng, quản lý phụ tùng bảo dưỡng và hỏi đáp trợ lý AI Em Vy.
+            </p>
 
-      <VehicleForm
-        vehicleToEdit={editingVehicle}
-        isOpen={vehicleModalOpen || state.vehicles.length === 0}
-        canCancel={state.vehicles.length > 0}
-        onSave={handleSaveVehicle}
-        onCancel={() => {
-          setVehicleModalOpen(false);
-          setEditingVehicle(null);
-        }}
-      />
+            <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingVehicle(null);
+                  setVehicleModalOpen(true);
+                }}
+                style={{
+                  padding: '12px 20px',
+                  borderRadius: '10px',
+                  background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                  border: 'none',
+                  color: '#fff',
+                  fontWeight: 700,
+                  fontSize: '14px',
+                  cursor: 'pointer',
+                  boxShadow: '0 4px 14px rgba(2, 132, 199, 0.4)',
+                }}
+              >
+                + Thêm chiếc xe đầu tiên của bạn
+              </button>
 
-      {state.vehicles.length > 0 && (
-        <>
-          {/* Active Navigation Deck Modules */}
-          {activeNav === 'dashboard' && (
-            <Dashboard
-              currentVehicle={currentVehicle}
-              vehicles={state.vehicles}
-              entries={state.entries}
-              parts={state.parts}
-              period={period}
-              medals={medals}
-              soundEnabled={soundEnabled}
-              onNavigateTab={(tabKey) => handleNavSwitch(tabKey as any)}
-            />
-          )}
+              <button
+                type="button"
+                onClick={() => setAuthModalOpen(true)}
+                style={{
+                  padding: '12px 18px',
+                  borderRadius: '10px',
+                  background: 'rgba(255, 255, 255, 0.08)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#f8fafc',
+                  fontWeight: 600,
+                  fontSize: '13.5px',
+                  cursor: 'pointer',
+                }}
+              >
+                ☁️ Đăng nhập tài khoản / Tải từ Google Drive
+              </button>
+            </div>
+          </div>
+        )}
 
-          {activeNav === 'entry' && (
-            <EntryForm
-              currentVehicle={currentVehicle}
-              vehicles={state.vehicles}
-              entries={state.entries}
-              parts={state.parts}
-              editingEntry={editingEntry}
-              appliedCommand={appliedCommand}
-              soundEnabled={soundEnabled}
-              onSaveEntry={handleSaveEntry}
-              onCancelEdit={() => setEditingEntry(null)}
-              onSavePart={handleSavePart}
-              onDeletePart={handleDeletePart}
-              onReplacePart={handleReplacePart}
-            />
-          )}
+        {/* Astro Copilot AI & Voice Radar Bar */}
+        {state.vehicles.length > 0 && (
+          <AstroCopilot
+            currentVehicle={currentVehicle}
+            currentOdo={currentOdo}
+            soundEnabled={soundEnabled}
+            onApplyCommand={handleApplyVoiceOrAICommand}
+          />
+        )}
 
-          {activeNav === 'history' && (
-            <HistoryList
-              currentVehicle={currentVehicle}
-              vehicles={state.vehicles}
-              entries={state.entries}
-              soundEnabled={soundEnabled}
-              onEditEntry={(entry) => {
-                setEditingEntry(entry);
-                setActiveNav('entry');
-              }}
-              onDeleteEntry={handleDeleteEntry}
-            />
-          )}
+        {/* Cockpit HUD Navigation Deck */}
+        {state.vehicles.length > 0 && (
+          <div className="hud-nav">
+            <button
+              type="button"
+              className={`hud-nav-item ${activeNav === 'dashboard' ? 'active' : ''}`}
+              onClick={() => handleNavSwitch('dashboard')}
+            >
+              🚗 Tổng Quan
+            </button>
+            <button
+              type="button"
+              className={`hud-nav-item ${activeNav === 'entry' ? 'active' : ''}`}
+              onClick={() => handleNavSwitch('entry')}
+            >
+              ⚡ Ghi Nhận
+            </button>
+            <button
+              type="button"
+              className={`hud-nav-item ${activeNav === 'history' ? 'active' : ''}`}
+              onClick={() => handleNavSwitch('history')}
+            >
+              📜 Nhật Ký
+            </button>
+            <button
+              type="button"
+              className={`hud-nav-item ${activeNav === 'parts' ? 'active' : ''}`}
+              onClick={() => handleNavSwitch('parts')}
+            >
+              🔧 Linh Kiện
+            </button>
+            <button
+              type="button"
+              className={`hud-nav-item ${activeNav === 'charts' ? 'active' : ''}`}
+              onClick={() => handleNavSwitch('charts')}
+            >
+              📊 Biểu Đồ
+            </button>
+            <button
+              type="button"
+              className={`hud-nav-item ${activeNav === 'medals' ? 'active' : ''}`}
+              onClick={() => handleNavSwitch('medals')}
+            >
+              🏅 Danh Hiệu
+            </button>
+            <button
+              type="button"
+              className={`hud-nav-item ${activeNav === 'system' ? 'active' : ''}`}
+              onClick={() => handleNavSwitch('system')}
+            >
+              ⚙️ Cài Đặt
+            </button>
+          </div>
+        )}
 
-          {activeNav === 'parts' && currentVehicle && (
-            <div className="card">
-              <PartsManager
-                vehicleId={currentVehicle.id}
+        <VehicleForm
+          vehicleToEdit={editingVehicle}
+          isOpen={vehicleModalOpen}
+          canCancel={state.vehicles.length > 0}
+          onSave={handleSaveVehicle}
+          onCancel={() => {
+            setVehicleModalOpen(false);
+            setEditingVehicle(null);
+          }}
+        />
+
+        {/* Auth & Google Drive Modal */}
+        <AuthModal
+          isOpen={authModalOpen}
+          onClose={() => setAuthModalOpen(false)}
+          currentUser={currentUser}
+          onUserChange={(usr) => setCurrentUser(usr)}
+          appState={state}
+          onRestoreState={(newState) => updateStateAndPersist(() => newState)}
+          syncStatus={syncStatus}
+          onUpdateSyncStatus={setSyncStatus}
+        />
+
+        {state.vehicles.length > 0 && (
+          <>
+            {/* Active Navigation Deck Modules */}
+            {activeNav === 'dashboard' && (
+              <Dashboard
+                currentVehicle={currentVehicle}
+                vehicles={state.vehicles}
+                entries={state.entries}
                 parts={state.parts}
-                curOdo={currentOdo}
+                period={period}
+                medals={medals}
+                soundEnabled={soundEnabled}
+                onNavigateTab={(tabKey) => handleNavSwitch(tabKey as any)}
+              />
+            )}
+
+            {activeNav === 'entry' && (
+              <EntryForm
+                currentVehicle={currentVehicle}
+                vehicles={state.vehicles}
+                entries={state.entries}
+                parts={state.parts}
+                editingEntry={editingEntry}
+                appliedCommand={appliedCommand}
+                soundEnabled={soundEnabled}
+                onSaveEntry={handleSaveEntry}
+                onCancelEdit={() => setEditingEntry(null)}
                 onSavePart={handleSavePart}
                 onDeletePart={handleDeletePart}
                 onReplacePart={handleReplacePart}
               />
-            </div>
-          )}
+            )}
 
-          {activeNav === 'charts' && currentVehicle && (
-            <ChartSection
-              entries={state.entries}
-              vehicleId={currentVehicle.id}
-              soundEnabled={soundEnabled}
-            />
-          )}
-
-          {activeNav === 'medals' && (
-            <MedalsSection medals={medals} hasVehicle={!!currentVehicle} />
-          )}
-
-          {activeNav === 'system' && (
-            <>
-              <BackgroundCustomizer
-                bgConfig={bgConfig}
-                onChangeBg={(newConfig) => setBgConfig(newConfig)}
-              />
-
-              <DataManager
-                state={state}
+            {activeNav === 'history' && (
+              <HistoryList
                 currentVehicle={currentVehicle}
-                onAddVehicle={() => {
-                  setEditingVehicle(null);
-                  setVehicleModalOpen(true);
+                vehicles={state.vehicles}
+                entries={state.entries}
+                soundEnabled={soundEnabled}
+                onEditEntry={(entry) => {
+                  setEditingEntry(entry);
+                  setActiveNav('entry');
                 }}
-                onEditVehicle={() => {
-                  if (currentVehicle) {
-                    setEditingVehicle(currentVehicle);
-                    setVehicleModalOpen(true);
-                  }
-                }}
-                onDeleteVehicle={handleDeleteVehicle}
-                onMergeState={handleMergeBackup}
-                onConnectDrive={() =>
-                  connectGoogleDrive(
-                    setSyncStatus,
-                    (remoteUpdater) => updateStateAndPersist(remoteUpdater),
-                    () => stateRef.current
-                  )
-                }
+                onDeleteEntry={handleDeleteEntry}
               />
-            </>
-          )}
-        </>
-      )}
-    </main>
+            )}
+
+            {activeNav === 'parts' && currentVehicle && (
+              <div className="card">
+                <h2>🔧 Quản lý linh kiện và hạn định kỳ ({currentVehicle.name})</h2>
+                <PartsManager
+                  vehicleId={currentVehicle.id}
+                  curOdo={currentOdo}
+                  parts={state.parts}
+                  entries={state.entries}
+                  onSavePart={handleSavePart}
+                  onDeletePart={handleDeletePart}
+                  onReplacePart={handleReplacePart}
+                />
+              </div>
+            )}
+
+            {activeNav === 'charts' && currentVehicle && (
+              <ChartSection
+                entries={state.entries}
+                vehicleId={currentVehicle.id}
+                soundEnabled={soundEnabled}
+              />
+            )}
+
+            {activeNav === 'medals' && (
+              <MedalsSection medals={medals} hasVehicle={!!currentVehicle} />
+            )}
+
+            {activeNav === 'system' && (
+              <>
+                <BackgroundCustomizer
+                  bgConfig={bgConfig}
+                  onChangeBg={(newConfig) => setBgConfig(newConfig)}
+                />
+
+                <DataManager
+                  state={state}
+                  currentVehicle={currentVehicle}
+                  onAddVehicle={() => {
+                    setEditingVehicle(null);
+                    setVehicleModalOpen(true);
+                  }}
+                  onEditVehicle={() => {
+                    if (currentVehicle) {
+                      setEditingVehicle(currentVehicle);
+                      setVehicleModalOpen(true);
+                    }
+                  }}
+                  onDeleteVehicle={() => {
+                    if (currentVehicle) {
+                      handleDeleteVehicle(currentVehicle.id);
+                    }
+                  }}
+                  onMergeState={handleMergeBackup}
+                  onConnectDrive={() =>
+                    connectGoogleDrive(
+                      setSyncStatus,
+                      (remoteUpdater) => updateStateAndPersist(remoteUpdater),
+                      () => stateRef.current
+                    )
+                  }
+                />
+              </>
+            )}
+          </>
+        )}
+      </main>
     </>
   );
 }
+
 export default App;

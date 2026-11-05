@@ -598,6 +598,7 @@ export const EntryForm: React.FC<EntryFormProps> = ({
           vehicleId={currentVehicle.id}
           parts={parts}
           curOdo={curOdo}
+          entries={entries}
           onSavePart={onSavePart}
           onDeletePart={onDeletePart}
           onReplacePart={onReplacePart}

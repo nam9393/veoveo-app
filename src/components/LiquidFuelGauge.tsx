@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { num } from '../utils/calc';
+import { gpsTrackingService, GpsRoute, GpsTelemetryStatus } from '../services/gpsTrackingService';
 
 interface LiquidFuelGaugeProps {
   vehicleId: string;
@@ -8,21 +9,6 @@ interface LiquidFuelGaugeProps {
   ratedCons?: number; // L/100km
   lastFuelDateFromEntry?: string | null;
   lastFuelPercentFromEntry?: number | null;
-}
-
-// Calculate Haversine distance between two GPS coordinates in Kilometers
-function calculateHaversineKm(lat1: number, lon1: number, lat2: number, lon2: number): number {
-  const R = 6371; // Earth's radius in km
-  const dLat = ((lat2 - lat1) * Math.PI) / 180;
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const a =
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos((lat1 * Math.PI) / 180) *
-      Math.cos((lat2 * Math.PI) / 180) *
-      Math.sin(dLon / 2) *
-      Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
 }
 
 // Web Audio API Synthesis for realistic fuel/water slosh sound
@@ -40,38 +26,38 @@ function playSloshSound() {
     const filter = ctx.createBiquadFilter();
 
     osc.type = 'sine';
-    osc.frequency.setValueAtTime(340, ctx.currentTime);
-    osc.frequency.exponentialRampToValueAtTime(120, ctx.currentTime + 0.4);
+    osc.frequency.setValueAtTime(320, ctx.currentTime);
+    osc.frequency.exponentialRampToValueAtTime(110, ctx.currentTime + 0.45);
 
     filter.type = 'lowpass';
-    filter.frequency.setValueAtTime(850, ctx.currentTime);
-    filter.frequency.exponentialRampToValueAtTime(170, ctx.currentTime + 0.4);
+    filter.frequency.setValueAtTime(820, ctx.currentTime);
+    filter.frequency.exponentialRampToValueAtTime(160, ctx.currentTime + 0.45);
 
-    gain.gain.setValueAtTime(0.2, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.42);
+    gain.gain.setValueAtTime(0.22, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.46);
 
     osc.connect(filter);
     filter.connect(gain);
     gain.connect(ctx.destination);
 
     osc.start();
-    osc.stop(ctx.currentTime + 0.45);
+    osc.stop(ctx.currentTime + 0.48);
 
     setTimeout(() => {
       try {
         const osc2 = ctx.createOscillator();
         const gain2 = ctx.createGain();
         osc2.type = 'triangle';
-        osc2.frequency.setValueAtTime(540, ctx.currentTime);
-        osc2.frequency.exponentialRampToValueAtTime(220, ctx.currentTime + 0.28);
-        gain2.gain.setValueAtTime(0.12, ctx.currentTime);
-        gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.3);
+        osc2.frequency.setValueAtTime(520, ctx.currentTime);
+        osc2.frequency.exponentialRampToValueAtTime(210, ctx.currentTime + 0.3);
+        gain2.gain.setValueAtTime(0.14, ctx.currentTime);
+        gain2.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.32);
         osc2.connect(gain2);
         gain2.connect(ctx.destination);
         osc2.start();
-        osc2.stop(ctx.currentTime + 0.31);
+        osc2.stop(ctx.currentTime + 0.33);
       } catch {}
-    }, 100);
+    }, 110);
   } catch {}
 }
 
@@ -92,164 +78,66 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
     return lastFuelPercentFromEntry != null ? lastFuelPercentFromEntry : 100;
   });
 
-  // GPS Odometry: Total actual distance driven since last refuel (in km)
-  const [gpsDrivenKm, setGpsDrivenKmState] = useState<number>(() => {
-    try {
-      const saved = localStorage.getItem(`soxe_gps_km_${vehicleId}`);
-      if (saved) return Number(saved);
-    } catch {}
-    return 12.5; // Initial realistic demonstration trip distance
-  });
+  // GPS Telemetry State from gpsTrackingService
+  const [telemetry, setTelemetry] = useState<GpsTelemetryStatus>(() =>
+    gpsTrackingService.getStatus()
+  );
 
-  // GPS Real-time Signal Telemetry
-  const [gpsStatus, setGpsStatus] = useState<{
-    connected: boolean;
-    lat: number | null;
-    lng: number | null;
-    speedKmh: number;
-    accuracyM: number | null;
-    lastUpdate: string;
-    msg: string;
-  }>({
-    connected: false,
-    lat: null,
-    lng: null,
-    speedKmh: 0,
-    accuracyM: null,
-    lastUpdate: 'Chưa kích hoạt',
-    msg: 'Đang khởi tạo kết nối vệ tinh GPS...',
-  });
+  // 3-Day Rolling Traveled Routes
+  const [traveledRoutes, setTraveledRoutes] = useState<GpsRoute[]>(() =>
+    gpsTrackingService.getTraveledRoutes(vehicleId)
+  );
 
-  // Slosh physics & interaction state
+  // Visual Interactive Slosh State
   const [isSloshing, setIsSloshing] = useState(false);
   const [sloshCount, setSloshCount] = useState(0);
-  const [ripples, setRipples] = useState<Array<{ id: number; x: number; y: number }>>([]);
-  const [showDetails, setShowDetails] = useState(false);
-  const jerryCanRef = useRef<HTMLDivElement | null>(null);
-  const lastGpsPosRef = useRef<{ lat: number; lng: number } | null>(null);
+  const [ripples, setRipples] = useState<{ id: number; x: number; y: number }[]>([]);
 
-  const setInitialPercent = (p: number) => {
-    setInitialPercentState(p);
-    try {
-      localStorage.setItem(`soxe_fuel_pct_${vehicleId}`, String(p));
-    } catch {}
-  };
+  // Manual trip modal state
+  const [showAddTripModal, setShowAddTripModal] = useState(false);
+  const [newTripStart, setNewTripStart] = useState('');
+  const [newTripEnd, setNewTripEnd] = useState('');
+  const [newTripKm, setNewTripKm] = useState('6.0');
 
-  const setGpsDrivenKm = (updater: number | ((prev: number) => number)) => {
-    setGpsDrivenKmState((prev) => {
-      const next = typeof updater === 'function' ? updater(prev) : updater;
-      const safeNext = Math.max(0, Math.round(next * 10) / 10);
-      try {
-        localStorage.setItem(`soxe_gps_km_${vehicleId}`, String(safeNext));
-      } catch {}
-      return safeNext;
-    });
-  };
+  const tankRef = useRef<HTMLDivElement>(null);
 
-  // Continuous High-Accuracy GPS Tracking
+  // Initialize and subscribe to GPS Tracking Service
   useEffect(() => {
-    if (!('geolocation' in navigator)) {
-      setGpsStatus((prev) => ({
-        ...prev,
-        connected: false,
-        msg: 'Thiết bị không hỗ trợ Geolocation GPS.',
-      }));
-      return;
-    }
+    gpsTrackingService.startTracking(vehicleId);
 
-    setGpsStatus((prev) => ({
-      ...prev,
-      connected: true,
-      msg: '📡 Đang khóa tín hiệu GPS vệ tinh...',
-    }));
+    const unsubStatus = gpsTrackingService.subscribeStatus((st) => {
+      setTelemetry(st);
+    });
 
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => {
-        const { latitude, longitude, speed, accuracy } = pos.coords;
-        const currentSpeedKmh = speed != null && speed > 0 ? Math.round(speed * 3.6) : 0;
+    const unsubRoutes = gpsTrackingService.subscribeRoutes((routes) => {
+      setTraveledRoutes(routes);
+    });
 
-        // If we have previous GPS fix, calculate incremental distance
-        if (lastGpsPosRef.current) {
-          const deltaKm = calculateHaversineKm(
-            lastGpsPosRef.current.lat,
-            lastGpsPosRef.current.lng,
-            latitude,
-            longitude
-          );
-
-          // Only accumulate if accuracy is decent (< 60m) and moved > 15m to ignore stationary GPS jitter
-          if (accuracy < 60 && deltaKm >= 0.015 && deltaKm < 3.0) {
-            setGpsDrivenKm((prev) => prev + deltaKm);
-          }
-        }
-
-        lastGpsPosRef.current = { lat: latitude, lng: longitude };
-
-        setGpsStatus({
-          connected: true,
-          lat: latitude,
-          lng: longitude,
-          speedKmh: currentSpeedKmh,
-          accuracyM: Math.round(accuracy),
-          lastUpdate: new Date().toLocaleTimeString('vi-VN'),
-          msg: `Khóa GPS chuẩn xác (±${Math.round(accuracy)}m)`,
-        });
-      },
-      (err) => {
-        console.warn('GPS watch warning:', err.message);
-        // If GPS is waiting or permission prompt, keep default coordinates active
-        setGpsStatus((prev) => ({
-          ...prev,
-          connected: true,
-          lat: prev.lat || 10.7769,
-          lng: prev.lng || 106.7009,
-          accuracyM: prev.accuracyM || 15,
-          lastUpdate: new Date().toLocaleTimeString('vi-VN'),
-          msg: 'GPS chế độ nền xe đang đỗ (Sẵn sàng đo quãng đường khi xe lăn bánh)',
-        }));
-      },
-      {
-        enableHighAccuracy: true,
-        timeout: 12000,
-        maximumAge: 5000,
-      }
-    );
+    setTraveledRoutes(gpsTrackingService.getTraveledRoutes(vehicleId));
 
     return () => {
-      navigator.geolocation.clearWatch(watchId);
+      unsubStatus();
+      unsubRoutes();
     };
   }, [vehicleId]);
 
-  // Tank Design: 'jerry' (Full-body glass Jerry Can) or 'cylinder' (Classic Cylindrical Tank)
-  const [tankDesign, setTankDesign] = useState<'jerry' | 'cylinder'>(() => {
+  // Sync initial fill % to local storage
+  const setInitialPercent = (val: number) => {
+    setInitialPercentState(val);
     try {
-      const saved = localStorage.getItem('soxe_tank_design');
-      if (saved === 'jerry' || saved === 'cylinder') return saved;
-    } catch {}
-    return 'jerry';
-  });
-
-  const [testPercentOverride, setTestPercentOverride] = useState<number | null>(null);
-
-  const toggleTankDesign = (d: 'jerry' | 'cylinder') => {
-    setTankDesign(d);
-    try {
-      localStorage.setItem('soxe_tank_design', d);
+      localStorage.setItem(`soxe_fuel_pct_${vehicleId}`, String(val));
     } catch {}
   };
 
-  // Fuel Consumption Calculation Based on REAL GPS DISTANCE:
-  // Fuel Consumed (L) = (gpsDrivenKm * ratedCons) / 100
-  // Burned % = (Fuel Consumed / Tank Capacity) * 100
+  // Fuel Consumption Calculation Based on REAL GPS ACCUMULATED DISTANCE:
+  // Burned Liters = (accumulatedDistanceKm * ratedCons) / 100
+  // Burned % = (Burned Liters / Tank Capacity) * 100
   // Current % = Initial % - Burned %
-  // *If vehicle is parked / gpsDrivenKm = 0 -> Fuel NEVER decreases!
   const effRate = ratedCons || 5.5;
+  const gpsDrivenKm = telemetry.accumulatedDistanceKm;
   const burnedLiters = (gpsDrivenKm * effRate) / 100;
   const burnedPercent = tankCapacity ? (burnedLiters / tankCapacity) * 100 : 0;
-  const liveGpsPercentage = Math.max(0, Math.min(100, initialPercent - burnedPercent));
-
-  // Current percentage reflects either manual quick test or real GPS odometry
-  const currentPercentage = testPercentOverride !== null ? testPercentOverride : liveGpsPercentage;
+  const currentPercentage = Math.max(0, Math.min(100, initialPercent - burnedPercent));
   const currentLiters = tankCapacity ? (currentPercentage / 100) * tankCapacity : 0;
 
   // Slosh Trigger with Sound & Touch Ripples
@@ -258,8 +146,8 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
     setSloshCount((c) => c + 1);
     playSloshSound();
 
-    if (e && jerryCanRef.current) {
-      const rect = jerryCanRef.current.getBoundingClientRect();
+    if (e && tankRef.current) {
+      const rect = tankRef.current.getBoundingClientRect();
       const clientX = 'clientX' in e ? e.clientX : (e as any).touches?.[0]?.clientX || rect.left + rect.width / 2;
       const clientY = 'clientY' in e ? e.clientY : (e as any).touches?.[0]?.clientY || rect.top + rect.height / 2;
       const x = clientX - rect.left;
@@ -274,14 +162,43 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
 
     setTimeout(() => {
       setIsSloshing(false);
-    }, 1200);
+    }, 1400);
   };
 
   // 1-Click Refuel to 100% and reset GPS trip distance
   const handleRefuelFull = () => {
-    setTestPercentOverride(null);
     setInitialPercent(100);
-    setGpsDrivenKm(0);
+    gpsTrackingService.resetOdometryKm(vehicleId);
+    triggerSlosh();
+  };
+
+  // Record a new completed route
+  const handleAddTrip = (e: React.FormEvent) => {
+    e.preventDefault();
+    const km = parseFloat(newTripKm) || 4;
+    const liters = (km * effRate) / 100;
+    const now = new Date();
+    const start = new Date(now.getTime() - Math.round(km * 2.5) * 60000);
+
+    const newRoute: GpsRoute = {
+      id: `route-${Date.now()}`,
+      vehicleId,
+      startTime: start.toISOString(),
+      endTime: now.toISOString(),
+      distanceKm: km,
+      startAddr: newTripStart.trim() || 'Vị trí khởi hành GPS',
+      endAddr: newTripEnd.trim() || 'Điểm đến GPS',
+      litersUsed: parseFloat(liters.toFixed(2)),
+      durationMins: Math.round(km * 2.5),
+      avgSpeedKmh: Math.round(km / ((km * 2.5) / 60)) || 25,
+      maxSpeedKmh: Math.round((km / ((km * 2.5) / 60)) * 1.6) || 45,
+    };
+
+    const updated = gpsTrackingService.recordRoute(newRoute);
+    setTraveledRoutes(updated);
+    setShowAddTripModal(false);
+    setNewTripStart('');
+    setNewTripEnd('');
     triggerSlosh();
   };
 
@@ -292,37 +209,127 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
   const isCritical = currentPercentage <= 15;
   const isWarning = currentPercentage > 15 && currentPercentage <= 30;
 
-  let fluidPrimary = '#00f0ff';       // Xanh ngọc Neon
-  let fluidSecondary = '#059669';     // Emerald glow
+  let fluidPrimary = '#00f0ff'; // Xanh ngọc Neon
+  let fluidSecondary = '#0284c7';
   let fluidGradientTop = '#00f0ff';
   let fluidGradientBottom = '#0284c7';
   let fluidThemeName = 'Xanh ngọc Neon (An toàn)';
 
   if (isCritical) {
-    fluidPrimary = '#f43f5e';         // Đỏ Ruby phát sáng
+    fluidPrimary = '#f43f5e'; // Đỏ Ruby phát sáng
     fluidSecondary = '#be123c';
     fluidGradientTop = '#fb7185';
     fluidGradientBottom = '#9f1239';
-    fluidThemeName = 'Đỏ Ruby phát sáng (Khẩn cấp sắp cạn)';
+    fluidThemeName = 'Đỏ Ruby phát sáng (Báo động khẩn cấp)';
   } else if (isWarning) {
-    fluidPrimary = '#f59e0b';         // Vàng hổ phách cảnh báo
+    fluidPrimary = '#f59e0b'; // Vàng hổ phách cảnh báo
     fluidSecondary = '#d97706';
     fluidGradientTop = '#fbbf24';
     fluidGradientBottom = '#b45309';
-    fluidThemeName = 'Vàng hổ phách (Cảnh báo ghé cây xăng)';
+    fluidThemeName = 'Vàng hổ phách (Cảnh báo chuẩn bị ghé cây xăng)';
   }
 
   // Vertical scale graduation markers from Top (F) down to Bottom (E)
   const verticalMarkers = [
-    { label: 'F (Đầy)', pct: 100, desc: '100% Đầy bình' },
-    { label: '3/4', pct: 75, desc: '3/4 dung tích' },
-    { label: '1/2', pct: 50, desc: '1/2 dung tích' },
-    { label: '1/4', pct: 25, desc: '1/4 dung tích' },
-    { label: 'E (Trống)', pct: 0, desc: '0% Cạn bình' },
+    { label: 'F (Đầy)', pct: 100 },
+    { label: '3/4', pct: 75 },
+    { label: '1/2', pct: 50 },
+    { label: '1/4', pct: 25 },
+    { label: 'E (Trống)', pct: 0 },
   ];
 
   return (
     <div style={{ marginTop: '10px' }}>
+      <style>{`
+        /* Smooth, stable, continuous ocean wave rolling left-to-right and right-to-left */
+        @keyframes oceanWaveRollLeftRight1 {
+          0% {
+            transform: translate3d(-35%, 0, 0);
+          }
+          50% {
+            transform: translate3d(-10%, 0, 0);
+          }
+          100% {
+            transform: translate3d(-35%, 0, 0);
+          }
+        }
+
+        @keyframes oceanWaveRollLeftRight2 {
+          0% {
+            transform: translate3d(-10%, 0, 0);
+          }
+          50% {
+            transform: translate3d(-38%, 0, 0);
+          }
+          100% {
+            transform: translate3d(-10%, 0, 0);
+          }
+        }
+
+        @keyframes oceanWaveRollLeftRight3 {
+          0% {
+            transform: translate3d(-25%, 0, 0);
+          }
+          50% {
+            transform: translate3d(-5%, 0, 0);
+          }
+          100% {
+            transform: translate3d(-25%, 0, 0);
+          }
+        }
+
+        /* Micro-bubbles rising strictly within the liquid level to the surface meniscus */
+        @keyframes liquidLevelBubbleRising {
+          0% {
+            transform: translateY(0) translateX(0) scale(0.7);
+            opacity: 0;
+          }
+          15% {
+            opacity: 0.9;
+          }
+          85% {
+            opacity: 0.9;
+            transform: translateY(-90%) translateX(var(--drift, 5px)) scale(1.05);
+          }
+          100% {
+            transform: translateY(-100%) translateX(var(--drift, 5px)) scale(1.2);
+            opacity: 0;
+          }
+        }
+
+        @keyframes rubyEmergencyPulse {
+          0% {
+            box-shadow: 0 0 16px rgba(244, 63, 94, 0.4), inset 0 0 12px rgba(244, 63, 94, 0.3);
+            border-color: #f43f5e;
+          }
+          100% {
+            box-shadow: 0 0 42px rgba(244, 63, 94, 0.95), inset 0 0 24px rgba(244, 63, 94, 0.7);
+            border-color: #ff2a55;
+          }
+        }
+
+        @keyframes rippleTouchEffect {
+          0% { transform: scale(0.2); opacity: 1; }
+          100% { transform: scale(2.6); opacity: 0; }
+        }
+
+        /* Custom sleek scrollbar for 3-day route history */
+        .veo-route-history-scroll::-webkit-scrollbar {
+          width: 5px;
+        }
+        .veo-route-history-scroll::-webkit-scrollbar-track {
+          background: rgba(2, 6, 23, 0.4);
+          border-radius: 4px;
+        }
+        .veo-route-history-scroll::-webkit-scrollbar-thumb {
+          background: rgba(56, 189, 248, 0.3);
+          border-radius: 4px;
+        }
+        .veo-route-history-scroll::-webkit-scrollbar-thumb:hover {
+          background: rgba(56, 189, 248, 0.6);
+        }
+      `}</style>
+
       <div
         className="liquid-wave-container"
         style={{
@@ -335,169 +342,71 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
           padding: '16px',
         }}
       >
-        {/* Header Row & Design Selector */}
+        {/* Header */}
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '14px', flexWrap: 'wrap', gap: '8px' }}>
           <div>
             <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-              <span style={{ fontSize: '22px' }}>{tankDesign === 'jerry' ? '🥫' : '🛢️'}</span>
+              <span style={{ fontSize: '22px' }}>🛢️</span>
               <div>
                 <h3 style={{ margin: 0, fontSize: '15.5px', color: '#f8fafc', fontWeight: 800 }}>
-                  {tankDesign === 'jerry' ? 'Can Xăng Jerry Quân Đội (Thân Trong Suốt)' : 'Bình Xăng Trụ Tròn Thủy Tinh (Cổ Điển)'}
+                  Bình Xăng Trơn Thủy Tinh (Sóng Biển Động Cuộn Trào)
                 </h3>
                 <small style={{ color: 'var(--mut)', fontSize: '11px' }}>
-                  Xăng chỉ hạ theo quãng đường GPS lăn bánh thực tế (xe đỗ yên không hao xăng)
+                  Thiết kế bình trơn tối giản · Bọt khí chuẩn xác theo mức xăng · Sóng cuộn trào mượt mà
                 </small>
               </div>
             </div>
           </div>
 
-          <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-            {/* Design Mode Switcher */}
-            <div style={{ display: 'flex', background: 'rgba(0, 0, 0, 0.4)', borderRadius: '8px', padding: '2px', border: '1px solid rgba(255, 255, 255, 0.1)' }}>
-              <button
-                type="button"
-                onClick={() => toggleTankDesign('jerry')}
-                style={{
-                  padding: '3px 8px',
-                  fontSize: '11px',
-                  borderRadius: '6px',
-                  background: tankDesign === 'jerry' ? 'var(--acc)' : 'transparent',
-                  color: tankDesign === 'jerry' ? 'var(--accT)' : 'var(--mut)',
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                🥫 Can Jerry
-              </button>
-              <button
-                type="button"
-                onClick={() => toggleTankDesign('cylinder')}
-                style={{
-                  padding: '3px 8px',
-                  fontSize: '11px',
-                  borderRadius: '6px',
-                  background: tankDesign === 'cylinder' ? 'var(--acc)' : 'transparent',
-                  color: tankDesign === 'cylinder' ? 'var(--accT)' : 'var(--mut)',
-                  fontWeight: 700,
-                  border: 'none',
-                  cursor: 'pointer',
-                }}
-              >
-                🛢️ Trụ Tròn
-              </button>
-            </div>
-
-            <div style={{ textAlign: 'right' }}>
-              <div
-                style={{
-                  fontSize: '28px',
-                  fontWeight: 900,
-                  color: fluidPrimary,
-                  fontFamily: 'monospace',
-                  textShadow: `0 0 16px ${fluidPrimary}`,
-                  lineHeight: 1,
-                }}
-              >
-                {Math.round(currentPercentage)}%
-              </div>
-              <div style={{ fontSize: '12px', color: '#cbd5e1', fontFamily: 'monospace', marginTop: '3px' }}>
-                ~{num(currentLiters)} / {tankCapacity}L
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Live GPS Lock Telemetry Banner */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '6px',
-            padding: '7px 10px',
-            borderRadius: '8px',
-            background: 'rgba(5, 12, 28, 0.85)',
-            border: '1px solid rgba(0, 240, 255, 0.3)',
-            marginBottom: '14px',
-            fontSize: '11.5px',
-          }}
-        >
-          <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
             <span
               style={{
-                width: '8px',
-                height: '8px',
-                borderRadius: '50%',
-                background: '#10b981',
-                boxShadow: '0 0 8px #10b981',
-                display: 'inline-block',
-              }}
-            />
-            <span style={{ color: '#00f0ff', fontWeight: 700 }}>🛰️ GPS Live:</span>
-            <span style={{ color: '#f1f5f9' }}>
-              {gpsStatus.lat ? `${gpsStatus.lat.toFixed(4)}, ${gpsStatus.lng?.toFixed(4)}` : 'Vệ tinh kết nối'} ·{' '}
-              Tốc độ: <b>{gpsStatus.speedKmh} km/h</b>
-            </span>
-          </div>
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-            <span style={{ color: 'var(--mut)' }}>
-              Đã chạy: <b style={{ color: '#00f0ff' }}>{gpsDrivenKm} km</b>
-            </span>
-            <button
-              type="button"
-              onClick={() => {
-                setGpsStatus((prev) => ({ ...prev, msg: 'Đang khóa lại GPS...' }));
-                if (navigator.geolocation) {
-                  navigator.geolocation.getCurrentPosition(() => {});
-                }
-              }}
-              style={{
-                padding: '2px 6px',
-                fontSize: '10px',
-                background: 'rgba(0, 240, 255, 0.15)',
-                color: '#00f0ff',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer',
+                fontSize: '11px',
+                padding: '3px 8px',
+                borderRadius: '6px',
+                background: 'rgba(16, 185, 129, 0.15)',
+                color: '#34d399',
+                border: '1px solid #10b981',
+                fontWeight: 700,
+                display: 'flex',
+                alignItems: 'center',
+                gap: '5px',
               }}
             >
-              🔄 Quét lại GPS
-            </button>
+              <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: '#10b981' }} />
+              GPS Live
+            </span>
           </div>
         </div>
 
-        {/* Main Display: Full-Body Liquid Tank + Vertical Scale */}
+        {/* MAIN CAN & SCALE ROW */}
         <div
           style={{
             display: 'flex',
-            gap: '20px',
             alignItems: 'center',
             justifyContent: 'center',
-            margin: '6px 0 16px',
+            gap: '24px',
+            margin: '10px 0 16px',
             flexWrap: 'wrap',
           }}
         >
-          {/* Tank Visual Container */}
+          {/* THE SLEEK SMOOTH TANK (BÌNH TRƠN TỐI GIẢN) */}
           <div
-            ref={jerryCanRef}
-            onClick={triggerSlosh}
-            onTouchStart={triggerSlosh}
-            className={`${isSloshing ? 'tank-sloshing' : ''}`}
+            ref={tankRef}
+            onClick={(e) => triggerSlosh(e)}
+            onTouchStart={(e) => triggerSlosh(e)}
             style={{
               position: 'relative',
-              width: tankDesign === 'jerry' ? '160px' : '150px',
+              width: '180px',
               height: '270px',
-              borderRadius: tankDesign === 'jerry' ? '18px 18px 14px 14px' : '26px',
-              background: 'linear-gradient(180deg, rgba(8, 14, 28, 0.95) 0%, rgba(4, 8, 16, 0.98) 100%)',
-              border: `2.5px solid ${fluidPrimary}`,
+              borderRadius: '26px', // Smooth capsule pill styling (no handles/spouts/stamps)
+              background: 'linear-gradient(135deg, rgba(255, 255, 255, 0.08) 0%, rgba(15, 23, 42, 0.45) 50%, rgba(2, 6, 23, 0.85) 100%)',
+              backdropFilter: 'blur(14px)',
+              WebkitBackdropFilter: 'blur(14px)',
+              border: `2px solid ${fluidPrimary}`,
               boxShadow: isCritical
-                ? '0 0 30px rgba(244, 63, 94, 0.6), inset 0 0 16px rgba(244, 63, 94, 0.4)'
-                : isWarning
-                ? '0 0 25px rgba(245, 158, 11, 0.5), inset 0 0 14px rgba(245, 158, 11, 0.3)'
-                : `0 0 25px ${fluidPrimary}44, inset 0 0 14px rgba(0, 0, 0, 0.9)`,
+                ? '0 0 32px rgba(244, 63, 94, 0.7), inset 0 0 20px rgba(244, 63, 94, 0.4)'
+                : `0 0 25px ${fluidPrimary}44, inset 0 0 18px rgba(0, 0, 0, 0.85)`,
               cursor: 'pointer',
               userSelect: 'none',
               transformOrigin: 'bottom center',
@@ -507,102 +416,18 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
             }}
             title="Chạm hoặc nhấp trực tiếp vào bình nhiên liệu để tạo sóng sánh chất lỏng!"
           >
-            {/* Jerry Can Decorative Top Hardware (When in Jerry Can mode) */}
-            {tankDesign === 'jerry' && (
-              <>
-                {/* Jerry Can Triple Handle */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: '16px',
-                    right: '16px',
-                    height: '16px',
-                    background: 'linear-gradient(180deg, #1e293b, #0f172a)',
-                    borderRadius: '0 0 8px 8px',
-                    border: `1.5px solid ${fluidPrimary}88`,
-                    borderTop: 'none',
-                    display: 'flex',
-                    justifyContent: 'space-around',
-                    alignItems: 'center',
-                    padding: '0 4px',
-                    zIndex: 25,
-                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.7)',
-                  }}
-                >
-                  <div style={{ width: '22px', height: '4px', background: '#020617', borderRadius: '2px' }} />
-                  <div style={{ width: '26px', height: '4px', background: '#020617', borderRadius: '2px' }} />
-                  <div style={{ width: '22px', height: '4px', background: '#020617', borderRadius: '2px' }} />
-                </div>
-
-                {/* Angled Spout & Cap on Top Right */}
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: '2px',
-                    right: '4px',
-                    width: '18px',
-                    height: '14px',
-                    background: 'linear-gradient(135deg, #475569, #1e293b)',
-                    borderRadius: '3px',
-                    border: `1px solid ${fluidPrimary}`,
-                    transform: 'rotate(15deg)',
-                    zIndex: 30,
-                    boxShadow: '0 2px 6px rgba(0, 0, 0, 0.8)',
-                  }}
-                >
-                  <div style={{ width: '100%', height: '3px', background: fluidPrimary, borderRadius: '2px 2px 0 0' }} />
-                </div>
-
-                {/* Stamped X-Rib Reinforcement lines across the FULL glass body */}
-                <svg
-                  viewBox="0 0 160 270"
-                  style={{
-                    position: 'absolute',
-                    inset: 0,
-                    pointerEvents: 'none',
-                    opacity: 0.22,
-                    zIndex: 18,
-                  }}
-                >
-                  <line x1="20" y1="30" x2="140" y2="245" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-                  <line x1="140" y1="30" x2="20" y2="245" stroke="#ffffff" strokeWidth="3" strokeLinecap="round" />
-                  <rect x="18" y="28" width="124" height="218" rx="8" fill="none" stroke="#ffffff" strokeWidth="1.5" strokeDasharray="6 4" />
-                </svg>
-              </>
-            )}
-
-            {/* Cylinder Mode Top & Bottom Hardware */}
-            {tankDesign === 'cylinder' && (
-              <>
-                <div
-                  style={{
-                    position: 'absolute',
-                    top: 0,
-                    left: '20px',
-                    right: '20px',
-                    height: '10px',
-                    background: 'linear-gradient(180deg, #334155, #0f172a)',
-                    borderRadius: '0 0 6px 6px',
-                    border: `1px solid ${fluidPrimary}`,
-                    zIndex: 25,
-                  }}
-                />
-                <div
-                  style={{
-                    position: 'absolute',
-                    bottom: 0,
-                    left: '30px',
-                    right: '30px',
-                    height: '8px',
-                    background: 'linear-gradient(0deg, #334155, #0f172a)',
-                    borderRadius: '6px 6px 0 0',
-                    border: `1px solid ${fluidPrimary}`,
-                    zIndex: 25,
-                  }}
-                />
-              </>
-            )}
+            {/* Top Minimalist Polished Bezel */}
+            <div
+              style={{
+                position: 'absolute',
+                top: 0,
+                left: 0,
+                right: 0,
+                height: '8px',
+                background: 'linear-gradient(180deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0) 100%)',
+                zIndex: 25,
+              }}
+            />
 
             {/* Touch Ripples */}
             {ripples.map((rip) => (
@@ -610,10 +435,10 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
                 key={rip.id}
                 style={{
                   position: 'absolute',
-                  left: rip.x - 50,
-                  top: rip.y - 40,
-                  width: '60px',
-                  height: '60px',
+                  left: rip.x - 45,
+                  top: rip.y - 45,
+                  width: '90px',
+                  height: '90px',
                   borderRadius: '50%',
                   border: `2px solid ${fluidPrimary}`,
                   pointerEvents: 'none',
@@ -623,172 +448,208 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
               />
             ))}
 
-            {/* Rising Micro-Bubbles from the bottom of the fuel */}
-            <div
-              style={{
-                position: 'absolute',
-                inset: 0,
-                zIndex: 20,
-                pointerEvents: 'none',
-                overflow: 'hidden',
-              }}
-            >
-              {[
-                { left: 18, size: 5, dur: 2.1, delay: 0, drift: '4px' },
-                { left: 52, size: 7, dur: 2.6, delay: 0.5, drift: '-5px' },
-                { left: 35, size: 4, dur: 1.8, delay: 0.9, drift: '4px' },
-                { left: 78, size: 6, dur: 2.3, delay: 1.4, drift: '-4px' },
-                { left: 65, size: 5, dur: 2.0, delay: 0.7, drift: '3px' },
-                ...(isSloshing
-                  ? [
-                      { left: 25, size: 9, dur: 1.0, delay: 0, drift: '7px' },
-                      { left: 60, size: 10, dur: 0.9, delay: 0.1, drift: '-7px' },
-                      { left: 40, size: 8, dur: 1.1, delay: 0.2, drift: '5px' },
-                    ]
-                  : []),
-              ].map((b, idx) => (
-                <span
-                  key={idx + (isSloshing ? '_s_' + sloshCount : '')}
-                  style={
-                    {
+            {/* FULL-BODY FLUID MASS (With small top air gap: max 90% height) */}
+            {(() => {
+              // Always keep a small air gap at the top so the tank never touches 100% ceiling
+              const maxFluidHeight = 90;
+              const fluidHeightPct = Math.max(7, Math.min(maxFluidHeight, (currentPercentage / 100) * maxFluidHeight));
+
+              return (
+                <div
+                  style={{
+                    position: 'absolute',
+                    bottom: 0,
+                    left: 0,
+                    right: 0,
+                    height: `${fluidHeightPct}%`,
+                    transition: isSloshing
+                      ? 'height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)'
+                      : 'height 1s cubic-bezier(0.4, 0, 0.2, 1)',
+                    zIndex: 10,
+                    overflow: 'visible',
+                  }}
+                >
+                  {/* 14 MICRO-BUBBLES SPREAD ACROSS FULL TANK WIDTH (4% to 96%) */}
+                  {/* Spawns at bottom of fuel and rises up to current liquid meniscus */}
+                  <div
+                    style={{
                       position: 'absolute',
-                      left: `${b.left}%`,
-                      bottom: '6px',
-                      width: `${b.size}px`,
-                      height: `${b.size}px`,
-                      borderRadius: '50%',
-                      background: 'radial-gradient(circle at 35% 35%, #ffffff 0%, rgba(255, 255, 255, 0.4) 70%)',
-                      boxShadow: '0 0 6px rgba(255, 255, 255, 0.9)',
-                      animation: `bubbleFloatVertical ${b.dur}s ease-in-out infinite`,
-                      animationDelay: `${b.delay}s`,
-                      '--drift': b.drift,
-                      '--drift-rev': `-${b.drift}`,
-                    } as React.CSSProperties
-                  }
-                />
-              ))}
-            </div>
+                      inset: 0,
+                      zIndex: 15,
+                      pointerEvents: 'none',
+                      overflow: 'hidden',
+                    }}
+                  >
+                    {[
+                      { left: 4, size: 4, dur: 2.1, delay: 0, drift: '4px' },
+                      { left: 11, size: 6, dur: 2.6, delay: 0.3, drift: '-5px' },
+                      { left: 18, size: 5, dur: 2.0, delay: 0.7, drift: '6px' },
+                      { left: 25, size: 7, dur: 2.8, delay: 0.2, drift: '-6px' },
+                      { left: 32, size: 4, dur: 1.9, delay: 0.9, drift: '5px' },
+                      { left: 39, size: 6, dur: 2.4, delay: 0.5, drift: '-5px' },
+                      { left: 46, size: 8, dur: 2.9, delay: 1.1, drift: '7px' },
+                      { left: 53, size: 5, dur: 2.2, delay: 0.1, drift: '-4px' },
+                      { left: 60, size: 7, dur: 2.7, delay: 0.6, drift: '6px' },
+                      { left: 68, size: 4, dur: 2.0, delay: 1.3, drift: '-6px' },
+                      { left: 75, size: 6, dur: 2.5, delay: 0.4, drift: '5px' },
+                      { left: 82, size: 8, dur: 3.0, delay: 0.8, drift: '-5px' },
+                      { left: 89, size: 5, dur: 2.3, delay: 1.2, drift: '4px' },
+                      { left: 96, size: 6, dur: 2.7, delay: 0.3, drift: '-4px' },
+                      ...(isSloshing
+                        ? [
+                            { left: 28, size: 10, dur: 1.0, delay: 0, drift: '8px' },
+                            { left: 50, size: 11, dur: 0.9, delay: 0.1, drift: '-8px' },
+                            { left: 72, size: 9, dur: 1.1, delay: 0.2, drift: '6px' },
+                          ]
+                        : []),
+                    ].map((b, idx) => (
+                      <span
+                        key={idx + (isSloshing ? '_slosh_' + sloshCount : '')}
+                        style={
+                          {
+                            position: 'absolute',
+                            left: `${b.left}%`,
+                            bottom: '4px',
+                            width: `${b.size}px`,
+                            height: `${b.size}px`,
+                            borderRadius: '50%',
+                            background: 'radial-gradient(circle at 35% 35%, #ffffff 0%, rgba(255, 255, 255, 0.4) 75%)',
+                            boxShadow: '0 0 6px rgba(255, 255, 255, 0.95)',
+                            animation: `liquidLevelBubbleRising ${b.dur}s ease-in-out infinite`,
+                            animationDelay: `${b.delay}s`,
+                            '--drift': b.drift,
+                          } as React.CSSProperties
+                        }
+                      />
+                    ))}
+                  </div>
 
-            {/* FULL-BODY FLUID MASS (Height controlled by currentPercentage) */}
-            <div
-              style={{
-                position: 'absolute',
-                bottom: 0,
-                left: 0,
-                right: 0,
-                height: `${Math.max(6, Math.min(100, currentPercentage))}%`,
-                transition: isSloshing
-                  ? 'height 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)'
-                  : 'height 1s cubic-bezier(0.4, 0, 0.2, 1)',
-                zIndex: 10,
-                overflow: 'visible',
-              }}
-            >
-              {/* Back Liquid Wave */}
-              <svg
-                viewBox="0 0 1200 120"
-                preserveAspectRatio="none"
-                style={{
-                  position: 'absolute',
-                  top: isSloshing ? '-22px' : '-14px',
-                  left: 0,
-                  width: '200%',
-                  height: isSloshing ? '36px' : '24px',
-                  fill: fluidSecondary,
-                  opacity: 0.75,
-                  animation: `waveFlowBack ${isSloshing ? '0.7s' : '3.4s'} linear infinite alternate`,
-                  zIndex: 2,
-                }}
-              >
-                <path d="M0,20 C200,60 400,-20 600,25 C800,65 1000,-15 1200,20 L1200,120 L0,120 Z" />
-              </svg>
+                  {/* SÓNG BIỂN ĐỘNG 1: Deep rolling swell left-to-right */}
+                  <svg
+                    viewBox="0 0 1600 120"
+                    preserveAspectRatio="none"
+                    style={{
+                      position: 'absolute',
+                      top: isSloshing ? '-26px' : '-16px',
+                      left: 0,
+                      width: '250%',
+                      height: isSloshing ? '40px' : '28px',
+                      fill: fluidSecondary,
+                      opacity: 0.65,
+                      animation: `oceanWaveRollLeftRight1 ${isSloshing ? '0.9s' : '3.8s'} ease-in-out infinite`,
+                      zIndex: 2,
+                    }}
+                  >
+                    <path d="M0,30 C200,70 400,-10 600,35 C800,80 1000,-10 1200,35 C1400,80 1600,-10 1600,35 L1600,120 L0,120 Z" />
+                  </svg>
 
-              {/* Front Liquid Wave */}
-              <svg
-                viewBox="0 0 1200 120"
-                preserveAspectRatio="none"
-                style={{
-                  position: 'absolute',
-                  top: isSloshing ? '-20px' : '-12px',
-                  left: 0,
-                  width: '200%',
-                  height: isSloshing ? '34px' : '22px',
-                  fill: fluidPrimary,
-                  opacity: 0.95,
-                  animation: `waveFlowFront ${isSloshing ? '0.5s' : '2.4s'} ease-in-out infinite alternate`,
-                  zIndex: 4,
-                  filter: `drop-shadow(0 -2px 6px ${fluidPrimary})`,
-                }}
-              >
-                <path d="M0,10 C150,-15 350,45 550,15 C750,-20 950,40 1200,10 L1200,120 L0,120 Z" />
-              </svg>
+                  {/* SÓNG BIỂN ĐỘNG 2: Mid surge right-to-left */}
+                  <svg
+                    viewBox="0 0 1600 120"
+                    preserveAspectRatio="none"
+                    style={{
+                      position: 'absolute',
+                      top: isSloshing ? '-24px' : '-14px',
+                      left: 0,
+                      width: '250%',
+                      height: isSloshing ? '36px' : '26px',
+                      fill: fluidPrimary,
+                      opacity: 0.85,
+                      animation: `oceanWaveRollLeftRight2 ${isSloshing ? '0.7s' : '2.9s'} ease-in-out infinite`,
+                      zIndex: 3,
+                    }}
+                  >
+                    <path d="M0,20 C200,-15 400,60 600,20 C800,-20 1000,55 1200,20 C1400,-15 1600,55 1600,20 L1600,120 L0,120 Z" />
+                  </svg>
 
-              {/* Glowing Meniscus line */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '-2px',
-                  left: 0,
-                  right: 0,
-                  height: '3px',
-                  background: '#ffffff',
-                  boxShadow: `0 0 10px #fff, 0 0 16px ${fluidPrimary}`,
-                  zIndex: 5,
-                  opacity: 0.9,
-                }}
-              />
+                  {/* SÓNG BIỂN ĐỘNG 3: Front Crest Wave with glowing drop shadow */}
+                  <svg
+                    viewBox="0 0 1600 120"
+                    preserveAspectRatio="none"
+                    style={{
+                      position: 'absolute',
+                      top: isSloshing ? '-20px' : '-12px',
+                      left: 0,
+                      width: '250%',
+                      height: isSloshing ? '34px' : '24px',
+                      fill: fluidPrimary,
+                      opacity: 0.98,
+                      animation: `oceanWaveRollLeftRight3 ${isSloshing ? '0.6s' : '2.3s'} ease-in-out infinite`,
+                      zIndex: 4,
+                      filter: `drop-shadow(0 -3px 8px ${fluidPrimary})`,
+                    }}
+                  >
+                    <path d="M0,15 C200,-25 400,50 600,18 C800,-25 1000,45 1200,15 C1400,-20 1600,45 1600,15 L1600,120 L0,120 Z" />
+                  </svg>
 
-              {/* Liquid Mass Body */}
-              <div
-                style={{
-                  position: 'absolute',
-                  top: '10px',
-                  left: 0,
-                  right: 0,
-                  bottom: 0,
-                  background: `linear-gradient(180deg, ${fluidGradientTop}ee 0%, ${fluidGradientBottom}ff 100%)`,
-                  boxShadow: `inset 0 0 18px ${fluidPrimary}99`,
-                }}
-              />
-            </div>
+                  {/* Luminous Liquid Surface Line */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '-2px',
+                      left: 0,
+                      right: 0,
+                      height: '3.5px',
+                      background: '#ffffff',
+                      boxShadow: `0 0 12px #fff, 0 0 18px ${fluidPrimary}`,
+                      zIndex: 5,
+                      opacity: 0.95,
+                    }}
+                  />
 
-            {/* Glass Specular Reflection Highlight */}
+                  {/* Liquid Mass Body */}
+                  <div
+                    style={{
+                      position: 'absolute',
+                      top: '12px',
+                      left: 0,
+                      right: 0,
+                      bottom: 0,
+                      background: `linear-gradient(180deg, ${fluidGradientTop}dd 0%, ${fluidGradientBottom}fa 100%)`,
+                      boxShadow: `inset 0 0 20px ${fluidPrimary}aa`,
+                    }}
+                  />
+                </div>
+              );
+            })()}
+
+            {/* Specular Glass Highlight Glare on the left edge */}
             <div
               style={{
                 position: 'absolute',
                 top: 0,
-                left: '6px',
+                left: '8px',
                 width: '16px',
                 bottom: 0,
-                background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.25) 0%, rgba(255, 255, 255, 0) 100%)',
+                background: 'linear-gradient(90deg, rgba(255, 255, 255, 0.28) 0%, rgba(255, 255, 255, 0) 100%)',
                 zIndex: 25,
                 pointerEvents: 'none',
               }}
             />
 
-            {/* Bottom Fuel Can Watermark */}
+            {/* Bottom Minimal Fuel Capacity Pill */}
             <div
               style={{
                 position: 'absolute',
-                bottom: '4px',
+                bottom: '8px',
                 left: 0,
                 right: 0,
                 textAlign: 'center',
-                fontSize: '9.5px',
+                fontSize: '10px',
                 color: '#fff',
-                opacity: 0.75,
-                fontWeight: 700,
-                letterSpacing: '0.08em',
+                opacity: 0.85,
+                fontWeight: 800,
+                letterSpacing: '0.06em',
                 fontFamily: 'monospace',
                 textTransform: 'uppercase',
                 zIndex: 26,
               }}
             >
-              {tankDesign === 'jerry' ? 'JERRY CAN' : 'FUEL TANK'} · {tankCapacity}L
+              FUEL TANK · {tankCapacity}L
             </div>
           </div>
 
-          {/* Vertical Graduation Scale from Top (F) to Bottom (E) */}
+          {/* Vertical Graduation Scale: Top (F) to Bottom (E) */}
           <div
             style={{
               flex: 1,
@@ -905,7 +766,7 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
           </div>
         )}
 
-        {/* QUICK TEST & INTERACTIVE ACTIONS */}
+        {/* CONTROLS & ODOMETRY STATUS */}
         <div
           style={{
             display: 'flex',
@@ -931,17 +792,17 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
               }}
             />
             <span style={{ color: '#e2e8f0', fontWeight: 600 }}>
-              Chất lỏng: <b style={{ color: fluidPrimary }}>{fluidThemeName}</b>
+              Trạng thái chất lỏng: <b style={{ color: fluidPrimary }}>{fluidThemeName}</b>
             </span>
           </div>
 
-          {/* Quick Actions & Slosh */}
+          {/* Quick Actions */}
           <div style={{ display: 'flex', gap: '6px', alignItems: 'center', flexWrap: 'wrap' }}>
             <button
               type="button"
               onClick={(e) => triggerSlosh(e)}
               style={{
-                padding: '4px 10px',
+                padding: '5px 12px',
                 fontSize: '11.5px',
                 borderRadius: '8px',
                 background: `linear-gradient(135deg, ${fluidPrimary}33 0%, rgba(2, 132, 199, 0.4) 100%)`,
@@ -950,146 +811,26 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
                 fontWeight: 700,
                 cursor: 'pointer',
               }}
-              title="Chạm hoặc lắc bình để cảm nhận sóng sánh và âm thanh vỗ nước"
+              title="Nhấp để lắc bình tạo sóng biển động cuộn trào và hiệu ứng âm thanh sống động"
             >
-              🌊 Lắc tạo sóng
+              🌊 Lắc tạo sóng biển động
             </button>
 
             <button
               type="button"
               onClick={handleRefuelFull}
               style={{
-                padding: '4px 10px',
+                padding: '5px 12px',
                 fontSize: '11.5px',
                 borderRadius: '8px',
                 background: 'rgba(16, 185, 129, 0.25)',
-                borderColor: '#10b981',
+                border: '1px solid #10b981',
                 color: '#34d399',
                 fontWeight: 700,
                 cursor: 'pointer',
               }}
             >
               ⚡ Đầy bình (0 km)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setShowDetails((p) => !p)}
-              style={{
-                padding: '4px 9px',
-                fontSize: '11px',
-                borderRadius: '8px',
-                background: 'rgba(255, 255, 255, 0.08)',
-                color: 'var(--mut)',
-                border: 'none',
-                cursor: 'pointer',
-              }}
-            >
-              ⚙️ {showDetails ? 'Đóng kiểm tra' : 'Kiểm tra cảnh báo & GPS'}
-            </button>
-          </div>
-        </div>
-
-        {/* QUICK TEST BUTTONS: Instantly test Full, Amber (25%), Ruby Red (<15%), and Live GPS */}
-        <div
-          style={{
-            marginTop: '10px',
-            padding: '8px 12px',
-            borderRadius: '8px',
-            background: 'rgba(10, 18, 36, 0.65)',
-            border: '1px solid rgba(255, 255, 255, 0.06)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            flexWrap: 'wrap',
-            gap: '6px',
-            fontSize: '11.5px',
-          }}
-        >
-          <span style={{ color: 'var(--mut)', fontWeight: 600 }}>Thử nghiệm màu & cảnh báo:</span>
-          <div style={{ display: 'flex', gap: '5px', flexWrap: 'wrap' }}>
-            <button
-              type="button"
-              onClick={() => {
-                setTestPercentOverride(100);
-                triggerSlosh();
-              }}
-              style={{
-                padding: '3px 8px',
-                fontSize: '11px',
-                borderRadius: '6px',
-                background: testPercentOverride === 100 ? '#00f0ff' : 'rgba(0, 240, 255, 0.15)',
-                color: testPercentOverride === 100 ? '#000' : '#00f0ff',
-                border: '1px solid #00f0ff',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title="Test mức Đầy bình 100% (Xanh ngọc Neon)"
-            >
-              🟢 Đầy 100%
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTestPercentOverride(25);
-                triggerSlosh();
-              }}
-              style={{
-                padding: '3px 8px',
-                fontSize: '11px',
-                borderRadius: '6px',
-                background: testPercentOverride === 25 ? '#f59e0b' : 'rgba(245, 158, 11, 0.18)',
-                color: testPercentOverride === 25 ? '#000' : '#fbbf24',
-                border: '1px solid #f59e0b',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title="Test mức Vàng Hổ Phách 25% (Cảnh báo ghé cây xăng)"
-            >
-              🟡 Vàng Hổ Phách 25%
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTestPercentOverride(10);
-                triggerSlosh();
-              }}
-              style={{
-                padding: '3px 8px',
-                fontSize: '11px',
-                borderRadius: '6px',
-                background: testPercentOverride === 10 ? '#f43f5e' : 'rgba(244, 63, 94, 0.2)',
-                color: testPercentOverride === 10 ? '#fff' : '#ff8da1',
-                border: '1px solid #f43f5e',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title="Test mức Đỏ Ruby Phát Sáng 10% (Báo động khẩn cấp nhấp nháy)"
-            >
-              🔴 Đỏ Ruby 10% (Khẩn cấp)
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setTestPercentOverride(null);
-                triggerSlosh();
-              }}
-              style={{
-                padding: '3px 8px',
-                fontSize: '11px',
-                borderRadius: '6px',
-                background: testPercentOverride === null ? '#10b981' : 'rgba(16, 185, 129, 0.15)',
-                color: testPercentOverride === null ? '#fff' : '#34d399',
-                border: '1px solid #10b981',
-                fontWeight: 700,
-                cursor: 'pointer',
-              }}
-              title="Khôi phục tính toán theo khoảng cách GPS xe lăn bánh thực tế"
-            >
-              🛰️ Theo GPS thực tế
             </button>
           </div>
         </div>
@@ -1108,123 +849,235 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
           }}
         >
           <span>
-            🛰️ Quãng đường GPS xe đã chạy: <b style={{ color: '#00f0ff' }}>{gpsDrivenKm} km</b>.{' '}
+            🛰️ <b>Tín hiệu GPS:</b> {telemetry.statusMessage}. Quãng đường GPS xe đã lăn bánh:{' '}
+            <b style={{ color: '#00f0ff' }}>{gpsDrivenKm} km</b>.{' '}
             Tiêu hao tính theo GPS: <b style={{ color: '#f43f5e' }}>−{burnedLiters.toFixed(2)}L (−{Math.round(burnedPercent)}%)</b> với định mức {effRate} L/100km.{' '}
             Còn lại trong bình: <b style={{ color: fluidPrimary }}>{Math.round(currentPercentage)}% (~{num(currentLiters)} / {tankCapacity}L)</b>.
           </span>
         </div>
 
-        {/* GPS Simulation / Test Drive Controls */}
-        {showDetails && (
-          <div
-            style={{
-              marginTop: '12px',
-              paddingTop: '12px',
-              borderTop: '1px solid rgba(255, 255, 255, 0.1)',
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-              gap: '12px',
-              fontSize: '11.5px',
-            }}
-          >
-            <div>
-              <label style={{ display: 'block', color: '#f8fafc', fontWeight: 600, marginBottom: '4px' }}>
-                🚗 Thử nghiệm lái xe (Cộng dồn GPS):
-              </label>
-              <div style={{ display: 'flex', gap: '6px' }}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTestPercentOverride(null);
-                    setGpsDrivenKm((k) => k + 5);
-                  }}
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: '11px',
-                    borderRadius: '6px',
-                    background: 'rgba(0, 240, 255, 0.15)',
-                    border: '1px solid #00f0ff',
-                    color: '#00f0ff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  +5 km
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTestPercentOverride(null);
-                    setGpsDrivenKm((k) => k + 20);
-                  }}
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: '11px',
-                    borderRadius: '6px',
-                    background: 'rgba(0, 240, 255, 0.15)',
-                    border: '1px solid #00f0ff',
-                    color: '#00f0ff',
-                    cursor: 'pointer',
-                  }}
-                >
-                  +20 km
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setTestPercentOverride(null);
-                    setGpsDrivenKm(0);
-                  }}
-                  style={{
-                    padding: '4px 8px',
-                    fontSize: '11px',
-                    borderRadius: '6px',
-                    background: 'rgba(255, 255, 255, 0.08)',
-                    color: 'var(--mut)',
-                    border: 'none',
-                    cursor: 'pointer',
-                  }}
-                >
-                  Đặt lại 0 km
-                </button>
-              </div>
-              <small style={{ color: 'var(--mut)', marginTop: '4px', display: 'block' }}>
-                Mô phỏng khoảng cách GPS để kiểm tra độ hạ % xăng thực tế
-              </small>
-            </div>
-
-            <div>
-              <label style={{ display: 'block', color: '#f8fafc', fontWeight: 600, marginBottom: '4px' }}>
-                ⛽ Mức nạp lúc đầy bình:
-              </label>
-              <div style={{ display: 'flex', gap: '4px' }}>
-                {[100, 75, 50].map((pct) => (
-                  <button
-                    key={pct}
-                    type="button"
-                    onClick={() => {
-                      setTestPercentOverride(null);
-                      setInitialPercent(pct);
-                    }}
-                    style={{
-                      padding: '4px 10px',
-                      fontSize: '11px',
-                      borderRadius: '6px',
-                      background: initialPercent === pct && testPercentOverride === null ? '#10b981' : 'rgba(255, 255, 255, 0.08)',
-                      color: initialPercent === pct && testPercentOverride === null ? '#fff' : 'var(--mut)',
-                      border: 'none',
-                      fontWeight: 700,
-                      cursor: 'pointer',
-                    }}
-                  >
-                    {pct === 100 ? 'Đầy 100%' : `${pct}%`}
-                  </button>
-                ))}
-              </div>
+        {/* 3-DAY ROLLING GPS TRAVELED ROUTES: SCROLLABLE HISTORY VIEW */}
+        <div
+          style={{
+            marginTop: '16px',
+            paddingTop: '14px',
+            borderTop: '1px solid rgba(255, 255, 255, 0.1)',
+          }}
+        >
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px', flexWrap: 'wrap', gap: '8px' }}>
+            <h4 style={{ margin: 0, fontSize: '13.5px', color: '#f8fafc', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              🗺️ Lộ trình di chuyển theo GPS ({traveledRoutes.length} chuyến trong 3 ngày gần nhất)
+            </h4>
+            <div style={{ display: 'flex', gap: '6px' }}>
+              <button
+                type="button"
+                onClick={() => setShowAddTripModal(true)}
+                style={{
+                  padding: '3px 8px',
+                  borderRadius: '6px',
+                  background: 'rgba(56, 189, 248, 0.18)',
+                  border: '1px solid #38bdf8',
+                  color: '#38bdf8',
+                  fontSize: '11px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                + Ghi nhận lộ trình mới
+              </button>
             </div>
           </div>
-        )}
+
+          <div style={{ fontSize: '11px', color: 'var(--mut)', marginBottom: '8px' }}>
+            📌 Lịch sử lưu tự động lộ trình xe chạy trong <b>72 giờ (3 ngày) gần nhất</b> theo dịch vụ GPS, sau đó tự động cuốn chiếu.
+          </div>
+
+          {/* SCROLLABLE ROUTE HISTORY CONTAINER */}
+          <div
+            className="veo-route-history-scroll"
+            style={{
+              maxHeight: '260px',
+              overflowY: 'auto',
+              paddingRight: '4px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '8px',
+            }}
+          >
+            {traveledRoutes.length === 0 ? (
+              <div
+                style={{
+                  padding: '16px',
+                  textAlign: 'center',
+                  background: 'rgba(2, 6, 23, 0.4)',
+                  borderRadius: '8px',
+                  border: '1px dashed rgba(255, 255, 255, 0.1)',
+                  color: 'var(--mut)',
+                  fontSize: '12px',
+                }}
+              >
+                Chưa có lộ trình nào được ghi nhận trong 3 ngày qua. Lộ trình sẽ tự động xuất hiện khi xe lăn bánh!
+              </div>
+            ) : (
+              traveledRoutes.map((trip) => {
+                const startTime = new Date(trip.startTime);
+                const timeStr = `${startTime.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit' })} ${startTime.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}`;
+
+                return (
+                  <div
+                    key={trip.id}
+                    style={{
+                      padding: '10px 12px',
+                      borderRadius: '8px',
+                      background: 'rgba(15, 23, 42, 0.7)',
+                      border: '1px solid rgba(255, 255, 255, 0.08)',
+                      display: 'flex',
+                      justifyContent: 'space-between',
+                      alignItems: 'center',
+                      flexWrap: 'wrap',
+                      gap: '8px',
+                    }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                      <span style={{ fontSize: '20px' }}>🚗</span>
+                      <div>
+                        <div style={{ fontWeight: 700, fontSize: '12.5px', color: '#f8fafc' }}>
+                          {trip.startAddr} <span style={{ color: '#38bdf8' }}>➔</span> {trip.endAddr}
+                        </div>
+                        <div style={{ fontSize: '11px', color: 'var(--mut)', marginTop: '2px' }}>
+                          🕒 {timeStr}
+                          {trip.durationMins ? ` · ${trip.durationMins} phút` : ''}
+                          {trip.avgSpeedKmh ? ` · TB: ${trip.avgSpeedKmh} km/h` : ''}
+                        </div>
+                      </div>
+                    </div>
+
+                    <div style={{ textAlign: 'right' }}>
+                      <div style={{ fontSize: '13px', fontWeight: 800, color: '#38bdf8' }}>
+                        {trip.distanceKm} km
+                      </div>
+                      <div style={{ fontSize: '11px', color: '#f59e0b', fontWeight: 600 }}>
+                        ⛽ ~{trip.litersUsed}L xăng
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+
+          {/* Add Trip Modal */}
+          {showAddTripModal && (
+            <div
+              style={{
+                position: 'fixed',
+                inset: 0,
+                zIndex: 10000,
+                background: 'rgba(2, 6, 23, 0.85)',
+                backdropFilter: 'blur(6px)',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                padding: '16px',
+              }}
+              onClick={() => setShowAddTripModal(false)}
+            >
+              <div
+                className="card"
+                style={{
+                  width: '100%',
+                  maxWidth: '380px',
+                  background: 'rgba(15, 23, 42, 0.95)',
+                  border: '1.5px solid #38bdf8',
+                  padding: '16px',
+                }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <h3 style={{ margin: '0 0 12px', fontSize: '15px', color: '#f8fafc' }}>
+                  📍 Ghi nhận lộ trình xe vừa di chuyển
+                </h3>
+                <form onSubmit={handleAddTrip} style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', color: 'var(--mut)', marginBottom: '3px' }}>
+                      Điểm xuất phát:
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newTripStart}
+                      onChange={(e) => setNewTripStart(e.target.value)}
+                      placeholder="VD: Nhà riêng, Q1"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', color: 'var(--mut)', marginBottom: '3px' }}>
+                      Điểm đến:
+                    </label>
+                    <input
+                      type="text"
+                      required
+                      value={newTripEnd}
+                      onChange={(e) => setNewTripEnd(e.target.value)}
+                      placeholder="VD: Cây xăng Petrolimex Q3"
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  <div>
+                    <label style={{ display: 'block', fontSize: '11.5px', color: 'var(--mut)', marginBottom: '3px' }}>
+                      Quãng đường đã đi (km):
+                    </label>
+                    <input
+                      type="number"
+                      step="0.1"
+                      min="0.1"
+                      required
+                      value={newTripKm}
+                      onChange={(e) => setNewTripKm(e.target.value)}
+                      style={{ width: '100%' }}
+                    />
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '8px', marginTop: '6px' }}>
+                    <button
+                      type="button"
+                      onClick={() => setShowAddTripModal(false)}
+                      style={{
+                        padding: '6px 12px',
+                        background: 'rgba(255, 255, 255, 0.1)',
+                        border: 'none',
+                        color: 'var(--mut)',
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Hủy
+                    </button>
+                    <button
+                      type="submit"
+                      style={{
+                        padding: '6px 14px',
+                        background: 'linear-gradient(135deg, #0284c7 0%, #0369a1 100%)',
+                        border: 'none',
+                        color: '#fff',
+                        fontWeight: 700,
+                        borderRadius: '6px',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      Lưu lộ trình
+                    </button>
+                  </div>
+                </form>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   );
 };
+
 export default LiquidFuelGauge;
