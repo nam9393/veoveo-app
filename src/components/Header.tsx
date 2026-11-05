@@ -61,6 +61,9 @@ export const Header: React.FC<HeaderProps> = ({
 
   const handleTrackSelect = (trackId: string) => {
     switchTrack(trackId);
+    if (!lofiPlaying) {
+      onToggleLofi();
+    }
     setShowTrackMenu(false);
   };
 

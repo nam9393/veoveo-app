@@ -101,6 +101,7 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
 
   const ttsKeepAliveTimerRef = useRef<any>(null);
   const speechQueueRef = useRef<string[]>([]);
+  const audioQueueRef = useRef<string[]>([]);
   const isSpeakingRef = useRef<boolean>(false);
 
   // Stop speaking and clear speech queue
@@ -109,6 +110,7 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
       clearInterval(ttsKeepAliveTimerRef.current);
       ttsKeepAliveTimerRef.current = null;
     }
+    audioQueueRef.current = [];
     speechQueueRef.current = [];
     isSpeakingRef.current = false;
     setIsSpeaking(false);
@@ -202,16 +204,36 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     }
   };
 
-  // Text-to-Speech function for AI responses (Southern Vietnamese Sweet & Charming Voice - Em Vy)
-  const speakText = (text: string) => {
-    stopSpeaking();
-    const cleaned = cleanForSpeech(text);
-    if (!cleaned) return;
+  // Play next sentence from the audio streaming queue
+  const playNextAudioSentence = () => {
+    if (audioQueueRef.current.length === 0) {
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      activeAudioRef.current = null;
+      return;
+    }
 
-    // 1. Try High-Quality Natural Vietnamese Female Voice Stream from /api/tts
+    const sentence = audioQueueRef.current.shift();
+    if (!sentence || !sentence.trim()) {
+      playNextAudioSentence();
+      return;
+    }
+
+    const trimmed = sentence.trim();
+    const isGitHubPages =
+      typeof window !== 'undefined' &&
+      (window.location.hostname.includes('github.io') || window.location.protocol === 'file:');
+
+    // On GitHub Pages or static hosts with no Node.js backend:
+    // Directly stream natural Vietnamese female speech via Google Translate TTS (works 100% on all browsers).
+    // On local/Cloud Run server with Express: use /api/tts.
+    const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(
+      trimmed.slice(0, 160)
+    )}`;
+    const primaryUrl = isGitHubPages ? googleTtsUrl : `/api/tts?text=${encodeURIComponent(trimmed.slice(0, 200))}`;
+
     try {
-      const audioUrl = `/api/tts?text=${encodeURIComponent(cleaned.slice(0, 450))}`;
-      const audio = new Audio(audioUrl);
+      const audio = new Audio(primaryUrl);
       activeAudioRef.current = audio;
 
       audio.onplay = () => {
@@ -220,28 +242,96 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
       };
 
       audio.onended = () => {
-        isSpeakingRef.current = false;
-        setIsSpeaking(false);
-        activeAudioRef.current = null;
+        playNextAudioSentence();
       };
 
       audio.onerror = () => {
-        console.warn('Audio streaming fallback to Web Speech API');
-        activeAudioRef.current = null;
-        fallbackToWebSpeech(cleaned);
+        // If /api/tts failed (e.g. 404 or backend unavailable), immediately retry with googleTtsUrl
+        if (primaryUrl !== googleTtsUrl) {
+          try {
+            const fallbackAudio = new Audio(googleTtsUrl);
+            activeAudioRef.current = fallbackAudio;
+            fallbackAudio.onplay = () => {
+              isSpeakingRef.current = true;
+              setIsSpeaking(true);
+            };
+            fallbackAudio.onended = () => playNextAudioSentence();
+            fallbackAudio.onerror = () => fallbackToWebSpeech(trimmed);
+            fallbackAudio.play().catch(() => fallbackToWebSpeech(trimmed));
+          } catch {
+            fallbackToWebSpeech(trimmed);
+          }
+        } else {
+          fallbackToWebSpeech(trimmed);
+        }
       };
 
       const playPromise = audio.play();
       if (playPromise !== undefined) {
-        playPromise.catch((e) => {
-          console.warn('Audio play autoplay blocked or failed, fallback to Web Speech:', e);
-          fallbackToWebSpeech(cleaned);
+        playPromise.catch(() => {
+          if (primaryUrl !== googleTtsUrl) {
+            try {
+              const fallbackAudio = new Audio(googleTtsUrl);
+              activeAudioRef.current = fallbackAudio;
+              fallbackAudio.onplay = () => {
+                isSpeakingRef.current = true;
+                setIsSpeaking(true);
+              };
+              fallbackAudio.onended = () => playNextAudioSentence();
+              fallbackAudio.onerror = () => fallbackToWebSpeech(trimmed);
+              fallbackAudio.play().catch(() => fallbackToWebSpeech(trimmed));
+            } catch {
+              fallbackToWebSpeech(trimmed);
+            }
+          } else {
+            fallbackToWebSpeech(trimmed);
+          }
         });
       }
-      return;
     } catch {
-      fallbackToWebSpeech(cleaned);
+      fallbackToWebSpeech(trimmed);
     }
+  };
+
+  // Text-to-Speech function for AI responses (Southern Vietnamese Sweet & Charming Voice - Em Vy)
+  const speakText = (text: string) => {
+    stopSpeaking();
+    const cleaned = cleanForSpeech(text);
+    if (!cleaned) return;
+
+    // Break into natural sentences for sweet, seamless pronunciation
+    const rawSentences = cleaned
+      .replace(/([.?!:\n]+)/g, '$1|')
+      .split('|')
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const sentences: string[] = [];
+    for (const s of rawSentences) {
+      if (s.length <= 140) {
+        sentences.push(s);
+      } else {
+        const parts = s.split(/,\s*/);
+        let curr = '';
+        for (const p of parts) {
+          if ((curr + ', ' + p).length <= 130) {
+            curr = curr ? curr + ', ' + p : p;
+          } else {
+            if (curr) sentences.push(curr);
+            curr = p;
+          }
+        }
+        if (curr) sentences.push(curr);
+      }
+    }
+
+    if (sentences.length === 0) return;
+
+    audioQueueRef.current = sentences;
+    isSpeakingRef.current = true;
+    setIsSpeaking(true);
+
+    playNextAudioSentence();
   };
 
   const fallbackToWebSpeech = (cleaned: string) => {
