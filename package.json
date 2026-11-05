@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "tsx server.ts",
     "start": "tsx server.ts",
-    "build": "tsc && vite build --base ./ && rm -rf docs && mkdir -p docs && cp -r dist/* docs/ && python3 package_zip.py",
+    "build": "tsc && vite build --base ./ && rm -rf docs && mkdir -p docs && cp -r dist/* docs/ && cp dist/index.html dist/404.html && cp dist/index.html docs/404.html && cp public/.nojekyll dist/.nojekyll && cp public/.nojekyll docs/.nojekyll && python3 package_zip.py",
     "pack": "python3 package_zip.py",
     "lint": "tsc --noEmit"
   },

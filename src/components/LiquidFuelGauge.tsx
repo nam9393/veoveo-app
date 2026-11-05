@@ -278,21 +278,21 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
           }
         }
 
-        /* Micro-bubbles rising strictly within the liquid level to the surface meniscus */
-        @keyframes liquidLevelBubbleRising {
+        /* 14 Micro-bubbles rising continuously across the full height and width of the tank */
+        @keyframes fullTankBodyBubbleRising {
           0% {
-            transform: translateY(0) translateX(0) scale(0.7);
+            transform: translateY(0) translateX(0) scale(0.6);
             opacity: 0;
           }
-          15% {
+          10% {
             opacity: 0.9;
           }
           85% {
-            opacity: 0.9;
-            transform: translateY(-90%) translateX(var(--drift, 5px)) scale(1.05);
+            opacity: 0.85;
+            transform: translateY(-240px) translateX(var(--drift, 4px)) scale(1.05);
           }
           100% {
-            transform: translateY(-100%) translateX(var(--drift, 5px)) scale(1.2);
+            transform: translateY(-278px) translateX(var(--drift, 4px)) scale(1.2);
             opacity: 0;
           }
         }
@@ -448,6 +448,60 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
               />
             ))}
 
+            {/* 14 MICRO-BUBBLES SPREAD ACROSS ENTIRE TANK WIDTH & HEIGHT (TOÀN BỘ CHIỀU RỘNG VÀ CHIỀU CAO THÂN BÌNH) */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                zIndex: 18,
+                pointerEvents: 'none',
+                overflow: 'hidden',
+              }}
+            >
+              {[
+                { left: 5, size: 4, dur: 2.8, delay: 0, drift: '4px' },
+                { left: 12, size: 6, dur: 3.4, delay: 0.4, drift: '-5px' },
+                { left: 19, size: 5, dur: 2.7, delay: 1.1, drift: '6px' },
+                { left: 26, size: 7, dur: 3.8, delay: 0.2, drift: '-6px' },
+                { left: 33, size: 4, dur: 2.5, delay: 1.5, drift: '5px' },
+                { left: 41, size: 6, dur: 3.2, delay: 0.7, drift: '-5px' },
+                { left: 48, size: 7, dur: 3.9, delay: 1.8, drift: '7px' },
+                { left: 56, size: 5, dur: 2.9, delay: 0.3, drift: '-4px' },
+                { left: 63, size: 7, dur: 3.6, delay: 1.0, drift: '6px' },
+                { left: 71, size: 4, dur: 2.6, delay: 2.1, drift: '-6px' },
+                { left: 78, size: 6, dur: 3.3, delay: 0.6, drift: '5px' },
+                { left: 85, size: 7, dur: 4.0, delay: 1.3, drift: '-5px' },
+                { left: 91, size: 5, dur: 3.0, delay: 1.9, drift: '4px' },
+                { left: 96, size: 6, dur: 3.5, delay: 0.5, drift: '-4px' },
+                ...(isSloshing
+                  ? [
+                      { left: 28, size: 9, dur: 1.2, delay: 0, drift: '8px' },
+                      { left: 50, size: 10, dur: 1.1, delay: 0.1, drift: '-8px' },
+                      { left: 72, size: 9, dur: 1.3, delay: 0.2, drift: '6px' },
+                    ]
+                  : []),
+              ].map((b, idx) => (
+                <span
+                  key={idx + (isSloshing ? '_slosh_' + sloshCount : '')}
+                  style={
+                    {
+                      position: 'absolute',
+                      left: `${b.left}%`,
+                      bottom: '-8px',
+                      width: `${b.size}px`,
+                      height: `${b.size}px`,
+                      borderRadius: '50%',
+                      background: 'radial-gradient(circle at 35% 35%, #ffffff 0%, rgba(255, 255, 255, 0.45) 75%)',
+                      boxShadow: `0 0 6px rgba(255, 255, 255, 0.95), 0 0 10px ${fluidPrimary}55`,
+                      animation: `fullTankBodyBubbleRising ${b.dur}s ease-in-out infinite`,
+                      animationDelay: `${b.delay}s`,
+                      '--drift': b.drift,
+                    } as React.CSSProperties
+                  }
+                />
+              ))}
+            </div>
+
             {/* FULL-BODY FLUID MASS (With small top air gap: max 90% height) */}
             {(() => {
               // Always keep a small air gap at the top so the tank never touches 100% ceiling
@@ -469,60 +523,6 @@ export const LiquidFuelGauge: React.FC<LiquidFuelGaugeProps> = ({
                     overflow: 'visible',
                   }}
                 >
-                  {/* 14 MICRO-BUBBLES SPREAD ACROSS FULL TANK WIDTH (4% to 96%) */}
-                  {/* Spawns at bottom of fuel and rises up to current liquid meniscus */}
-                  <div
-                    style={{
-                      position: 'absolute',
-                      inset: 0,
-                      zIndex: 15,
-                      pointerEvents: 'none',
-                      overflow: 'hidden',
-                    }}
-                  >
-                    {[
-                      { left: 4, size: 4, dur: 2.1, delay: 0, drift: '4px' },
-                      { left: 11, size: 6, dur: 2.6, delay: 0.3, drift: '-5px' },
-                      { left: 18, size: 5, dur: 2.0, delay: 0.7, drift: '6px' },
-                      { left: 25, size: 7, dur: 2.8, delay: 0.2, drift: '-6px' },
-                      { left: 32, size: 4, dur: 1.9, delay: 0.9, drift: '5px' },
-                      { left: 39, size: 6, dur: 2.4, delay: 0.5, drift: '-5px' },
-                      { left: 46, size: 8, dur: 2.9, delay: 1.1, drift: '7px' },
-                      { left: 53, size: 5, dur: 2.2, delay: 0.1, drift: '-4px' },
-                      { left: 60, size: 7, dur: 2.7, delay: 0.6, drift: '6px' },
-                      { left: 68, size: 4, dur: 2.0, delay: 1.3, drift: '-6px' },
-                      { left: 75, size: 6, dur: 2.5, delay: 0.4, drift: '5px' },
-                      { left: 82, size: 8, dur: 3.0, delay: 0.8, drift: '-5px' },
-                      { left: 89, size: 5, dur: 2.3, delay: 1.2, drift: '4px' },
-                      { left: 96, size: 6, dur: 2.7, delay: 0.3, drift: '-4px' },
-                      ...(isSloshing
-                        ? [
-                            { left: 28, size: 10, dur: 1.0, delay: 0, drift: '8px' },
-                            { left: 50, size: 11, dur: 0.9, delay: 0.1, drift: '-8px' },
-                            { left: 72, size: 9, dur: 1.1, delay: 0.2, drift: '6px' },
-                          ]
-                        : []),
-                    ].map((b, idx) => (
-                      <span
-                        key={idx + (isSloshing ? '_slosh_' + sloshCount : '')}
-                        style={
-                          {
-                            position: 'absolute',
-                            left: `${b.left}%`,
-                            bottom: '4px',
-                            width: `${b.size}px`,
-                            height: `${b.size}px`,
-                            borderRadius: '50%',
-                            background: 'radial-gradient(circle at 35% 35%, #ffffff 0%, rgba(255, 255, 255, 0.4) 75%)',
-                            boxShadow: '0 0 6px rgba(255, 255, 255, 0.95)',
-                            animation: `liquidLevelBubbleRising ${b.dur}s ease-in-out infinite`,
-                            animationDelay: `${b.delay}s`,
-                            '--drift': b.drift,
-                          } as React.CSSProperties
-                        }
-                      />
-                    ))}
-                  </div>
 
                   {/* SÓNG BIỂN ĐỘNG 1: Deep rolling swell left-to-right */}
                   <svg

@@ -18,12 +18,37 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  
+  <script>
+    // GitHub Pages trailing slash fixer:
+    // If accessed as /veoveo-app without trailing slash, relative paths like ./assets fail with 404.
+    // Redirect immediately to /veoveo-app/ so relative JS and CSS bundles load properly.
+    if (window.location.pathname === '/veoveo-app') {
+      window.location.replace('/veoveo-app/' + window.location.search + window.location.hash);
+    }
+  </script>
+
   <script src="https://accounts.google.com/gsi/client" async defer></script>
-  <script type="module" crossorigin src="./assets/index-DcqgUivh.js"></script>
-  <link rel="stylesheet" crossorigin href="./assets/index-Czfm_snZ.css">
+  <script type="module" crossorigin src="./assets/index-mQnWEzpt.js"></script>
+  <link rel="stylesheet" crossorigin href="./assets/index-DiQVZSP0.css">
 </head>
-<body>
-  <div id="root"></div>
+<body style="margin: 0; background-color: #030712; color: #f8fafc; font-family: 'Be Vietnam Pro', sans-serif;">
+  <div id="root">
+    <!-- Initial Loading State to prevent white flash -->
+    <div style="min-height: 100vh; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at 50% 30%, #1e293b 0%, #030712 100%);">
+      <div style="position: relative; width: 64px; height: 64px; display: flex; align-items: center; justify-content: center; margin-bottom: 16px;">
+        <div style="position: absolute; inset: 0; border: 3px solid rgba(56, 189, 248, 0.2); border-top-color: #38bdf8; border-radius: 50%; animation: veoSpin 1s linear infinite;"></div>
+        <span style="font-size: 28px;">🚗</span>
+      </div>
+      <div style="font-size: 15px; font-weight: 700; color: #f8fafc; letter-spacing: 0.5px;">Veo App</div>
+      <div style="font-size: 11px; color: #94a3b8; margin-top: 4px;">Đang tải taplo điều khiển...</div>
+    </div>
+    <style>
+      @keyframes veoSpin {
+        to { transform: rotate(360deg); }
+      }
+    </style>
+  </div>
   <script>
     if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
       window.addEventListener('load', () => {
@@ -34,6 +59,7 @@
             if (installing) {
               installing.onstatechange = () => {
                 if (installing.state === 'installed' && navigator.serviceWorker.controller) {
+                  // New content available, automatically reload to show updated UI
                   window.location.reload();
                 }
               };

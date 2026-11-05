@@ -212,17 +212,21 @@ export function initGoogleSync(
         callback: (r: any) => pend && pend.cb(r),
         error_callback: (e: any) => pend && pend.err(e),
       });
-      onStatus('Chưa kết nối Google Drive');
       let m = false;
       try {
         m = localStorage.getItem('soxe_gd') === '1';
       } catch (e) {}
-      if (m) {
-        connectGoogleDrive(onStatus, onRemoteUpdate, getState);
+      if (m && tokenOk()) {
+        isConnected = true;
+        onStatus('Google Drive sẵn sàng');
+      } else if (m) {
+        onStatus('Sẵn sàng đồng bộ Google Drive');
+      } else {
+        onStatus('Chưa kết nối Google Drive');
       }
     } else if (++n > 50) {
       clearInterval(w);
-      onStatus('Không tải được dịch vụ Google. Kiểm tra mạng.');
+      onStatus('Chưa tải được dịch vụ Google. Sẵn sàng hoạt động ngoại tuyến.');
     }
   }, 200);
 }
@@ -305,8 +309,7 @@ export function scheduleDrivePush(
   onRemoteUpdate: (updater: (prev: AppState) => AppState) => void,
   getState: () => AppState
 ) {
-  if (!isConnected) return;
-  if (!tokenOk()) getToken().catch(() => {});
+  if (!isConnected || !tokenOk()) return;
   if (pushTimer) clearTimeout(pushTimer);
   pushTimer = setTimeout(() => syncNow(onStatus, onRemoteUpdate, getState), 700);
 }

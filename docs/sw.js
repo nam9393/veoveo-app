@@ -1,4 +1,4 @@
-const CACHE_NAME = 'veo-app-v2.2-live';
+const CACHE_NAME = 'veo-app-v2.3-ghpages';
 
 const CORE_ASSETS = [
   './manifest.json',
