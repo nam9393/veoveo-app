@@ -96,7 +96,7 @@ const handleTts = async (req: express.Request, res: express.Response) => {
       return;
     }
 
-    const cacheKey = cleanText.slice(0, 300);
+    const cacheKey = cleanText.slice(0, 1500);
     if (ttsAudioCache.has(cacheKey)) {
       const cached = ttsAudioCache.get(cacheKey)!;
       res.setHeader('Content-Type', cached.mimeType);
@@ -115,7 +115,7 @@ const handleTts = async (req: express.Request, res: express.Response) => {
             role: 'user',
             parts: [
               {
-                text: cleanText.slice(0, 300),
+                text: cleanText.slice(0, 1500),
                 speechMetadata: {
                   style: 'Sweet, charming, gentle and affectionate Southern Vietnamese young woman',
                 },
@@ -185,7 +185,7 @@ const handleTts = async (req: express.Request, res: express.Response) => {
     if (cur) chunks.push(cur);
 
     const buffers: Buffer[] = [];
-    for (const chunk of chunks.slice(0, 10)) {
+    for (const chunk of chunks.slice(0, 25)) {
       const url = `https://translate.google.com/translate_tts?ie=UTF-8&q=${encodeURIComponent(chunk)}&tl=vi&client=tw-ob`;
       const ttsRes = await fetch(url, {
         headers: {

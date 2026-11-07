@@ -88,15 +88,72 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     window.speechSynthesis.onvoiceschanged = populateVoices;
   }, []);
 
-  // Clean text from symbols before reading with TTS
+  // Clean and phonetically normalize text for natural Vietnamese speech without cutoffs
   const cleanForSpeech = (text: string): string => {
     return text
-      .replace(/[#*_`~>]/g, '')
-      .replace(/\[.*?\]/g, '')
-      .replace(/\(.*?\)/g, '')
+      // Remove URLs, emojis, markdown markers
       .replace(/https?:\/\/\S+/g, '')
       .replace(/[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}]/gu, '')
+      .replace(/[*_`~#]/g, '')
+      .replace(/\[.*?\]/g, '')
+      // Expand list numbering so periods don't break sentences
+      .replace(/^\s*1\.\s*/gm, 'Thứ nhất, ')
+      .replace(/^\s*2\.\s*/gm, 'Thứ hai, ')
+      .replace(/^\s*3\.\s*/gm, 'Thứ ba, ')
+      .replace(/^\s*4\.\s*/gm, 'Thứ tư, ')
+      .replace(/^\s*5\.\s*/gm, 'Thứ năm, ')
+      .replace(/^\s*\d+\.\s*/gm, 'Tiếp theo, ')
+      .replace(/^\s*[-•]\s*/gm, 'Dạ, ')
+      // Convert thousands separator dot inside numbers (e.g. 15.000 -> 15 ngàn, 1.500 -> 1 ngàn 500)
+      .replace(/(\d+)\.000\b/g, '$1 ngàn')
+      .replace(/(\d+)\.(\d{3})\b/g, '$1 ngàn $2')
+      .replace(/(\d+)\.000\s*km/gi, '$1 ngàn cây số')
+      // Decimals like 7.5 -> 7 phẩy 5
+      .replace(/(\d+)\.(\d+)/g, '$1 phẩy $2')
+      // Natural Vietnamese units
+      .replace(/\b(\d+)\s*km\/h\b/gi, '$1 cây số một giờ')
+      .replace(/\b(\d+)\s*km\b/gi, '$1 cây số')
+      .replace(/\b(\d+)\s*l\/100km\b/gi, '$1 lít trên một trăm cây số')
+      .replace(/\b(\d+)\s*lít\b/gi, '$1 lít')
+      .replace(/\b(\d+)\s*k\b/gi, '$1 ngàn')
+      .replace(/\b(\d+)\s*tr\b/gi, '$1 triệu')
+      .replace(/\b(\d+)\s*(?:đ|vnd|vnđ)\b/gi, '$1 đồng')
+      .replace(/\bmin\b/gi, 'tối thiểu')
+      .replace(/\bmax\b/gi, 'tối đa')
+      .replace(/\bodo\b/gi, 'ô đô')
+      .replace(/\bgps\b/gi, 'gờ pê ét')
+      .replace(/[\(\)]/g, ', ')
+      .replace(/[:;]/g, ', ')
+      .replace(/\s+/g, ' ')
       .trim();
+  };
+
+  // Break text into logical clauses under 130 characters each to avoid cut-offs
+  const splitIntoSpeechSentences = (text: string): string[] => {
+    const rawChunks = text
+      .split(/(?<=[.?!…\n])\s+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 0);
+
+    const result: string[] = [];
+    for (const chunk of rawChunks) {
+      if (chunk.length <= 130) {
+        result.push(chunk);
+      } else {
+        const subParts = chunk.split(/(?<=[,])\s+/);
+        let acc = '';
+        for (const part of subParts) {
+          if ((acc + ' ' + part).trim().length <= 120) {
+            acc = (acc + ' ' + part).trim();
+          } else {
+            if (acc) result.push(acc);
+            acc = part;
+          }
+        }
+        if (acc) result.push(acc);
+      }
+    }
+    return result.filter((s) => s.trim().length > 0);
   };
 
   const ttsKeepAliveTimerRef = useRef<any>(null);
@@ -127,7 +184,7 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     }
   };
 
-  // Speak next chunk in queue sequentially to bypass 15s browser cut-off
+  // Speak next chunk in queue sequentially to bypass browser speech limit
   const speakNextInQueue = () => {
     if (!('speechSynthesis' in window)) return;
     if (speechQueueRef.current.length === 0) {
@@ -147,7 +204,6 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     }
 
     try {
-      // Unfreeze browser speech engine
       window.speechSynthesis.resume();
 
       const utterance = new SpeechSynthesisUtterance(chunk.trim());
@@ -187,7 +243,7 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
         speakNextInQueue();
       };
 
-      // Heartbeat to prevent Chromium 15s speech freeze
+      // Heartbeat to prevent Chromium speech freeze
       if (!ttsKeepAliveTimerRef.current) {
         ttsKeepAliveTimerRef.current = setInterval(() => {
           if (window.speechSynthesis && window.speechSynthesis.speaking) {
@@ -204,12 +260,41 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     }
   };
 
+  // Fallback to Web Speech queue without dropping remaining sentences
+  const fallbackToWebSpeechQueue = (sentences: string[]) => {
+    if (!('speechSynthesis' in window)) {
+      console.warn('Trình duyệt chưa hỗ trợ SpeechSynthesis');
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      return;
+    }
+
+    speechQueueRef.current = sentences.filter((s) => s.trim().length > 0);
+    if (speechQueueRef.current.length === 0) {
+      isSpeakingRef.current = false;
+      setIsSpeaking(false);
+      return;
+    }
+
+    isSpeakingRef.current = true;
+    setIsSpeaking(true);
+
+    try {
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.resume();
+      setTimeout(() => {
+        speakNextInQueue();
+      }, 50);
+    } catch {
+      speakNextInQueue();
+    }
+  };
+
   // Play next sentence from the audio streaming queue
   const playNextAudioSentence = () => {
     if (audioQueueRef.current.length === 0) {
       isSpeakingRef.current = false;
       setIsSpeaking(false);
-      activeAudioRef.current = null;
       return;
     }
 
@@ -224,107 +309,60 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
       typeof window !== 'undefined' &&
       (window.location.hostname.includes('github.io') || window.location.protocol === 'file:');
 
-    // On GitHub Pages or static hosts with no Node.js backend:
-    // Directly stream natural Vietnamese female speech via Google Translate TTS (works 100% on all browsers).
-    // On local/Cloud Run server with Express: use /api/tts.
+    // On GitHub Pages: stream Google Translate TTS directly; On server: /api/tts
     const googleTtsUrl = `https://translate.google.com/translate_tts?ie=UTF-8&tl=vi&client=tw-ob&q=${encodeURIComponent(
-      trimmed.slice(0, 160)
+      trimmed
     )}`;
-    const primaryUrl = isGitHubPages ? googleTtsUrl : `/api/tts?text=${encodeURIComponent(trimmed.slice(0, 200))}`;
+    const primaryUrl = isGitHubPages ? googleTtsUrl : `/api/tts?text=${encodeURIComponent(trimmed)}`;
 
-    try {
-      const audio = new Audio(primaryUrl);
-      activeAudioRef.current = audio;
-
-      audio.onplay = () => {
-        isSpeakingRef.current = true;
-        setIsSpeaking(true);
-      };
-
-      audio.onended = () => {
-        playNextAudioSentence();
-      };
-
-      audio.onerror = () => {
-        // If /api/tts failed (e.g. 404 or backend unavailable), immediately retry with googleTtsUrl
-        if (primaryUrl !== googleTtsUrl) {
-          try {
-            const fallbackAudio = new Audio(googleTtsUrl);
-            activeAudioRef.current = fallbackAudio;
-            fallbackAudio.onplay = () => {
-              isSpeakingRef.current = true;
-              setIsSpeaking(true);
-            };
-            fallbackAudio.onended = () => playNextAudioSentence();
-            fallbackAudio.onerror = () => fallbackToWebSpeech(trimmed);
-            fallbackAudio.play().catch(() => fallbackToWebSpeech(trimmed));
-          } catch {
-            fallbackToWebSpeech(trimmed);
-          }
-        } else {
-          fallbackToWebSpeech(trimmed);
-        }
-      };
-
-      const playPromise = audio.play();
-      if (playPromise !== undefined) {
-        playPromise.catch(() => {
-          if (primaryUrl !== googleTtsUrl) {
-            try {
-              const fallbackAudio = new Audio(googleTtsUrl);
-              activeAudioRef.current = fallbackAudio;
-              fallbackAudio.onplay = () => {
-                isSpeakingRef.current = true;
-                setIsSpeaking(true);
-              };
-              fallbackAudio.onended = () => playNextAudioSentence();
-              fallbackAudio.onerror = () => fallbackToWebSpeech(trimmed);
-              fallbackAudio.play().catch(() => fallbackToWebSpeech(trimmed));
-            } catch {
-              fallbackToWebSpeech(trimmed);
-            }
-          } else {
-            fallbackToWebSpeech(trimmed);
-          }
-        });
-      }
-    } catch {
-      fallbackToWebSpeech(trimmed);
+    if (!activeAudioRef.current) {
+      activeAudioRef.current = new Audio();
     }
+    const audio = activeAudioRef.current;
+
+    const onAudioEnd = () => {
+      audio.onended = null;
+      audio.onerror = null;
+      playNextAudioSentence();
+    };
+
+    const onAudioFail = () => {
+      audio.onended = null;
+      audio.onerror = null;
+      // Transfer current chunk AND all remaining chunks into Web Speech queue so reading NEVER stops!
+      const remaining = [trimmed, ...audioQueueRef.current];
+      audioQueueRef.current = [];
+      fallbackToWebSpeechQueue(remaining);
+    };
+
+    audio.onended = onAudioEnd;
+    audio.onerror = () => {
+      if (primaryUrl !== googleTtsUrl) {
+        audio.src = googleTtsUrl;
+        audio.play().catch(onAudioFail);
+      } else {
+        onAudioFail();
+      }
+    };
+
+    audio.src = primaryUrl;
+    audio.play().catch(() => {
+      if (primaryUrl !== googleTtsUrl) {
+        audio.src = googleTtsUrl;
+        audio.play().catch(onAudioFail);
+      } else {
+        onAudioFail();
+      }
+    });
   };
 
-  // Text-to-Speech function for AI responses (Southern Vietnamese Sweet & Charming Voice - Em Vy)
+  // Text-to-Speech function for AI responses (Sweet Southern Vietnamese Voice - Em Vy)
   const speakText = (text: string) => {
     stopSpeaking();
     const cleaned = cleanForSpeech(text);
     if (!cleaned) return;
 
-    // Break into natural sentences for sweet, seamless pronunciation
-    const rawSentences = cleaned
-      .replace(/([.?!:\n]+)/g, '$1|')
-      .split('|')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    const sentences: string[] = [];
-    for (const s of rawSentences) {
-      if (s.length <= 140) {
-        sentences.push(s);
-      } else {
-        const parts = s.split(/,\s*/);
-        let curr = '';
-        for (const p of parts) {
-          if ((curr + ', ' + p).length <= 130) {
-            curr = curr ? curr + ', ' + p : p;
-          } else {
-            if (curr) sentences.push(curr);
-            curr = p;
-          }
-        }
-        if (curr) sentences.push(curr);
-      }
-    }
-
+    const sentences = splitIntoSpeechSentences(cleaned);
     if (sentences.length === 0) return;
 
     audioQueueRef.current = sentences;
@@ -332,33 +370,6 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
     setIsSpeaking(true);
 
     playNextAudioSentence();
-  };
-
-  const fallbackToWebSpeech = (cleaned: string) => {
-    if (!('speechSynthesis' in window)) {
-      console.warn('Trình duyệt chưa hỗ trợ SpeechSynthesis');
-      return;
-    }
-
-    const sentences = cleaned
-      .replace(/([.?!:\n]+)/g, '$1|')
-      .split('|')
-      .map((s) => s.trim())
-      .filter((s) => s.length > 0);
-
-    speechQueueRef.current = sentences.length > 0 ? sentences : [cleaned];
-    isSpeakingRef.current = true;
-    setIsSpeaking(true);
-
-    try {
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.resume();
-      setTimeout(() => {
-        speakNextInQueue();
-      }, 50);
-    } catch {
-      speakNextInQueue();
-    }
   };
 
   const handleToggleTts = () => {

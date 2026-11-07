@@ -133,7 +133,7 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({
 
   return (
     <div id="vform" className="card">
-      <h2 id="vh">{vehicleToEdit ? '✏️ Sửa phương tiện & Áp suất lốp OEM' : '🚗 Thêm phương tiện mới'}</h2>
+      <h2 id="vh">{vehicleToEdit ? '✏️ Sửa phương tiện' : '🚗 Thêm phương tiện mới'}</h2>
       <form id="vf" onSubmit={handleSubmit}>
         {/* Vehicle Category Selector */}
         <div className="full" style={{ marginBottom: '8px' }}>
@@ -244,62 +244,7 @@ export const VehicleForm: React.FC<VehicleFormProps> = ({
           ))}
         </datalist>
 
-        {/* OEM Tire Pressure Specification Box */}
-        <div
-          className="full"
-          style={{
-            margin: '8px 0',
-            padding: '12px 14px',
-            borderRadius: '12px',
-            background: 'rgba(5, 12, 24, 0.75)',
-            border: '1px solid var(--line)',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '6px' }}>
-            <span style={{ fontSize: '13px', fontWeight: 700, color: 'var(--acc)' }}>
-              🛡️ Áp suất lốp theo khuyến cáo nhà sản xuất (OEM)
-            </span>
-            <span style={{ fontSize: '11px', color: '#10b981', fontWeight: 600 }}>
-              {wheelCount === 2 ? '2 bánh (Trước & Sau)' : '4 bánh'}
-            </span>
-          </div>
 
-          <p style={{ margin: '0 0 10px', fontSize: '12px', color: 'var(--mut)', lineHeight: 1.5 }}>
-            {oemNote || 'Áp suất chuẩn giúp tối ưu quãng đường, tiết kiệm nhiên liệu và an toàn khi phanh.'}
-          </p>
-
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-            <label style={{ margin: 0 }}>
-              <span style={{ fontSize: '11.5px', color: 'var(--ink)' }}>
-                Bánh trước: <b>{frontBar} bar</b> (~{barToPsi(frontBar)} PSI)
-              </span>
-              <input
-                type="number"
-                step="0.05"
-                min="1.0"
-                max="4.5"
-                value={frontBar}
-                onChange={(e) => setFrontBar(+e.target.value || 2.0)}
-                style={{ marginTop: '4px' }}
-              />
-            </label>
-
-            <label style={{ margin: 0 }}>
-              <span style={{ fontSize: '11.5px', color: 'var(--ink)' }}>
-                Bánh sau: <b>{rearBar} bar</b> (~{barToPsi(rearBar)} PSI)
-              </span>
-              <input
-                type="number"
-                step="0.05"
-                min="1.0"
-                max="4.5"
-                value={rearBar}
-                onChange={(e) => setRearBar(+e.target.value || 2.25)}
-                style={{ marginTop: '4px' }}
-              />
-            </label>
-          </div>
-        </div>
 
         <div className="full row" style={{ marginTop: '8px' }}>
           <button className="pri" type="submit">

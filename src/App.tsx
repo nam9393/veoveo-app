@@ -21,8 +21,8 @@ import { AstroCopilot } from './components/AstroCopilot';
 import { AuthModal } from './components/AuthModal';
 import { PRESET_BACKGROUNDS, COCKPIT_THEMES } from './constants';
 import { ParsedCommand } from './utils/voiceParser';
-import { startLofiMusic, toggleLofiMusic, isLofiPlaying } from './utils/lofiAudio';
 import { checkAndNotifyMaintenance } from './services/notificationService';
+import { initAutoPlayOnUserGesture } from './utils/bgMusic';
 
 // First-time users start with clean slate (no forced default Toyota Vios)
 const defaultAppState: AppState = {
@@ -79,43 +79,6 @@ export function App() {
       return true;
     }
   });
-
-  // Lofi Chill Instrumental Music state
-  const [lofiActive, setLofiActive] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('veo_lofi_enabled') === '1';
-    } catch {
-      return false;
-    }
-  });
-
-  // Start relaxing Lo-Fi chill instrumental background music on first user interaction
-  useEffect(() => {
-    const handleFirstGesture = () => {
-      try {
-        const pref = localStorage.getItem('veo_lofi_enabled');
-        if (pref !== '0') {
-          const started = startLofiMusic();
-          if (started) setLofiActive(true);
-        }
-      } catch {}
-      window.removeEventListener('pointerdown', handleFirstGesture);
-      window.removeEventListener('keydown', handleFirstGesture);
-    };
-
-    window.addEventListener('pointerdown', handleFirstGesture, { once: true });
-    window.addEventListener('keydown', handleFirstGesture, { once: true });
-
-    return () => {
-      window.removeEventListener('pointerdown', handleFirstGesture);
-      window.removeEventListener('keydown', handleFirstGesture);
-    };
-  }, []);
-
-  const handleToggleLofi = () => {
-    const next = toggleLofiMusic();
-    setLofiActive(next);
-  };
 
   const [bgConfig, setBgConfig] = useState<BackgroundConfig>(() => {
     const def: BackgroundConfig = { mode: 'preset', id: 'luxury-cabin', data: '', op: 45, theme: 'bronze' };
@@ -203,13 +166,14 @@ export function App() {
     });
   };
 
-  // Setup Google Drive sync listener
+  // Setup Google Drive sync listener & Background MP3 music autoplay
   useEffect(() => {
     initGoogleSync(
       setSyncStatus,
       (remoteUpdater) => updateStateAndPersist(remoteUpdater),
       () => stateRef.current
     );
+    initAutoPlayOnUserGesture();
   }, []);
 
   const handleToggleSound = () => {
@@ -570,8 +534,6 @@ export function App() {
           onToggleSound={handleToggleSound}
           currentUser={currentUser}
           onOpenAuth={() => setAuthModalOpen(true)}
-          lofiPlaying={lofiActive}
-          onToggleLofi={handleToggleLofi}
         />
 
         {/* Empty Garage Onboarding for First Time Users */}
@@ -592,7 +554,7 @@ export function App() {
               Chào mừng bạn đến với Veo Sổ Xe Thông Minh!
             </h2>
             <p style={{ color: 'var(--mut)', fontSize: '13px', maxWidth: '520px', margin: '0 auto 18px', lineHeight: 1.6 }}>
-              Bắt đầu theo dõi nhật ký phương tiện của bạn: kiểm soát tiêu thụ xăng chuẩn xác theo GPS, theo dõi áp suất lốp theo khuyến nghị hãng, quản lý phụ tùng bảo dưỡng và hỏi đáp trợ lý AI Em Vy.
+              Bắt đầu theo dõi nhật ký phương tiện của bạn: kiểm soát tiêu thụ xăng chuẩn xác theo GPS, quản lý phụ tùng bảo dưỡng và hỏi đáp trợ lý AI Em Vy.
             </p>
 
             <div style={{ display: 'flex', gap: '10px', justifyContent: 'center', flexWrap: 'wrap' }}>
