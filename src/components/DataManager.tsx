@@ -3,6 +3,14 @@ import { AppState, Vehicle } from '../types';
 import { ENTRY_TYPES } from '../constants';
 import { today } from '../utils/calc';
 import { getStoredClientId, saveClientId } from '../utils/sync';
+import {
+  getGeminiApiKey,
+  setGeminiApiKey,
+  getAIPersona,
+  setAIPersona,
+  AIPersona,
+} from '../services/geminiService';
+import { gpsTrackingService } from '../services/gpsTrackingService';
 
 interface DataManagerProps {
   state: AppState;
@@ -31,6 +39,29 @@ export const DataManager: React.FC<DataManagerProps> = ({
   const [manualText, setManualText] = useState('');
   const [clientId, setClientId] = useState(getStoredClientId());
   const [showCidBox, setShowCidBox] = useState(false);
+  const [apiKey, setApiKeyState] = useState(getGeminiApiKey());
+  const [persona, setPersonaState] = useState<AIPersona>(getAIPersona());
+  const [keySavedMsg, setKeySavedMsg] = useState('');
+
+  const handleSaveApiKey = () => {
+    setGeminiApiKey(apiKey);
+    setKeySavedMsg('✅ Đã lưu Google Gemini API Key thành công!');
+    setTimeout(() => setKeySavedMsg(''), 3500);
+  };
+
+  const handleSelectPersona = (p: AIPersona) => {
+    setPersonaState(p);
+    setAIPersona(p);
+  };
+
+  const handleLoadDemoGps = () => {
+    if (!currentVehicle) {
+      alert('Vui lòng thêm hoặc chọn xe trước khi nạp dữ liệu mẫu!');
+      return;
+    }
+    gpsTrackingService.populateDemoRoutes(currentVehicle.id);
+    alert(`Đã nạp 4 chuyến đi mẫu cho xe ${currentVehicle.name}! Vui lòng sang tab Tổng Quan để xem.`);
+  };
 
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -298,45 +329,182 @@ export const DataManager: React.FC<DataManagerProps> = ({
         </div>
       </details>
 
+      {/* Gemini AI & Offline Assistant Configuration */}
       <div
         style={{
           marginTop: '16px',
-          padding: '14px',
+          padding: '16px',
           borderRadius: '12px',
-          background: 'rgba(245, 158, 11, 0.06)',
-          border: '1px solid var(--line)',
+          background: 'linear-gradient(135deg, rgba(15, 23, 42, 0.9) 0%, rgba(30, 41, 59, 0.8) 100%)',
+          border: '1.5px solid rgba(56, 189, 248, 0.25)',
         }}
       >
-        <h3 style={{ margin: '0 0 8px', fontSize: '13.5px', color: 'var(--acc)' }}>
-          🛠️ Đồng bộ GitHub & Khắc phục lỗi dấu X đỏ (GitHub Pages)
-        </h3>
-        <div style={{ fontSize: '12px', color: '#cbd5e1', lineHeight: 1.6 }}>
-          <p style={{ margin: '0 0 8px' }}>
-            <b>Tại sao trước đó bị dấu X đỏ trên GitHub Actions?</b>
-            <br />
-            1. <b>Cài đặt Pages:</b> Trên GitHub repo, vào <b>Settings</b> ➔ <b>Pages</b> ➔ Tại mục <b>Source</b>, chọn <b>GitHub Actions</b> (thay vì <i>Deploy from a branch</i>).
-            <br />
-            2. <b>Quyền Actions:</b> Vào <b>Settings</b> ➔ <b>Actions</b> ➔ <b>General</b> ➔ kéo xuống <b>Workflow permissions</b>, chọn <b>Read and write permissions</b> rồi bấm Save.
-            <br />
-            3. <b>Nếu dùng Deploy from branch:</b> Bạn có thể chọn nhánh <code>main</code> và thư mục <code>/docs</code> (mã nguồn đã tự động build sẵn bản web hoàn chỉnh vào thư mục <code>docs/</code>).
-          </p>
-          <p style={{ margin: '0 0 6px' }}>
-            <b>⚡ Link trực tiếp chạy mượt mà kèm AI Gemini đầy đủ:</b>
-          </p>
-          <div
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '10px' }}>
+          <h3 style={{ margin: 0, fontSize: '14px', color: '#38bdf8', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <span>🤖</span> Cấu hình Trí tuệ Nhân tạo Gemini AI
+          </h3>
+          <span
             style={{
-              padding: '7px 10px',
-              background: 'rgba(10, 15, 25, 0.9)',
-              borderRadius: '6px',
-              fontSize: '11.5px',
-              fontFamily: 'monospace',
-              color: 'var(--acc)',
-              wordBreak: 'break-all',
-              border: '1px solid var(--line)',
-              marginBottom: '6px',
+              fontSize: '11px',
+              padding: '2px 8px',
+              borderRadius: '12px',
+              background: apiKey ? 'rgba(16, 185, 129, 0.15)' : 'rgba(245, 158, 11, 0.15)',
+              color: apiKey ? '#34d399' : '#fbbf24',
+              border: `1px solid ${apiKey ? '#10b981' : '#f59e0b'}`,
             }}
           >
-            https://ais-pre-jlczx3v33qd2cngtlwrz75-22176439405.asia-northeast1.run.app
+            {apiKey ? '● Đang dùng Gemini 1.5 Flash' : '○ Đang dùng Trợ lý Offline'}
+          </span>
+        </div>
+
+        <p style={{ fontSize: '12px', color: '#94a3b8', margin: '0 0 12px', lineHeight: 1.5 }}>
+          Để trợ lý AI trò chuyện thông minh không giới hạn trên GitHub Pages, hãy lấy API Key miễn phí từ{' '}
+          <a
+            href="https://aistudio.google.com/app/apikey"
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: '#38bdf8', textDecoration: 'underline' }}
+          >
+            Google AI Studio
+          </a>{' '}
+          và dán vào đây (chỉ lưu trên máy của bạn, không gửi đi đâu khác):
+        </p>
+
+        <div style={{ display: 'flex', gap: '8px', marginBottom: '12px', flexWrap: 'wrap' }}>
+          <input
+            type="password"
+            placeholder="Dán Gemini API Key (AIzaSy...)"
+            value={apiKey}
+            onChange={(e) => setApiKeyState(e.target.value)}
+            style={{
+              flex: 1,
+              minWidth: '220px',
+              padding: '8px 12px',
+              fontSize: '12px',
+              borderRadius: '8px',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+              background: 'rgba(0, 0, 0, 0.3)',
+              color: '#fff',
+            }}
+          />
+          <button
+            type="button"
+            onClick={handleSaveApiKey}
+            className="pri"
+            style={{ padding: '8px 14px', fontSize: '12px', borderRadius: '8px', whiteSpace: 'nowrap' }}
+          >
+            💾 Lưu API Key
+          </button>
+          {apiKey && (
+            <button
+              type="button"
+              onClick={() => {
+                setApiKeyState('');
+                setGeminiApiKey('');
+                setKeySavedMsg('Đã xóa API Key!');
+                setTimeout(() => setKeySavedMsg(''), 2500);
+              }}
+              style={{
+                padding: '8px 12px',
+                fontSize: '12px',
+                borderRadius: '8px',
+                background: 'rgba(239, 68, 68, 0.15)',
+                color: '#f87171',
+                border: '1px solid #ef4444',
+              }}
+            >
+              Xóa Key
+            </button>
+          )}
+        </div>
+
+        {keySavedMsg && (
+          <div style={{ fontSize: '12px', color: '#10b981', marginBottom: '10px', fontWeight: 600 }}>
+            {keySavedMsg}
+          </div>
+        )}
+
+        {/* Persona Selector */}
+        <div style={{ marginTop: '10px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px' }}>
+          <div style={{ fontSize: '12px', color: '#cbd5e1', marginBottom: '6px', fontWeight: 600 }}>
+            Phong cách xưng hô của Trợ lý AI:
+          </div>
+          <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+            <button
+              type="button"
+              onClick={() => handleSelectPersona('vy')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '11.5px',
+                cursor: 'pointer',
+                background: persona === 'vy' ? 'rgba(244, 114, 182, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                border: `1px solid ${persona === 'vy' ? '#f472b6' : 'rgba(255, 255, 255, 0.15)'}`,
+                color: persona === 'vy' ? '#f472b6' : '#cbd5e1',
+                fontWeight: persona === 'vy' ? 700 : 500,
+              }}
+            >
+              🌸 Em Vy (Ngọt ngào, chu đáo)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPersona('expert')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '11.5px',
+                cursor: 'pointer',
+                background: persona === 'expert' ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                border: `1px solid ${persona === 'expert' ? '#38bdf8' : 'rgba(255, 255, 255, 0.15)'}`,
+                color: persona === 'expert' ? '#38bdf8' : '#cbd5e1',
+                fontWeight: persona === 'expert' ? 700 : 500,
+              }}
+            >
+              🔧 Kỹ sư ô tô (Chuẩn kỹ thuật, ngắn gọn)
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSelectPersona('friendly')}
+              style={{
+                padding: '6px 12px',
+                borderRadius: '8px',
+                fontSize: '11.5px',
+                cursor: 'pointer',
+                background: persona === 'friendly' ? 'rgba(52, 211, 153, 0.25)' : 'rgba(255, 255, 255, 0.05)',
+                border: `1px solid ${persona === 'friendly' ? '#34d399' : 'rgba(255, 255, 255, 0.15)'}`,
+                color: persona === 'friendly' ? '#34d399' : '#cbd5e1',
+                fontWeight: persona === 'friendly' ? 700 : 500,
+              }}
+            >
+              🤝 Bạn đồng hành (Lịch thiệp, thân thiện)
+            </button>
+          </div>
+        </div>
+
+        {/* Demo GPS Data Loader */}
+        <div style={{ marginTop: '12px', borderTop: '1px solid rgba(255, 255, 255, 0.08)', paddingTop: '10px' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: '8px' }}>
+            <div>
+              <b style={{ fontSize: '12px', color: '#f8fafc' }}>📍 Dữ liệu chạy GPS mẫu</b>
+              <div style={{ fontSize: '11px', color: '#94a3b8' }}>
+                Nạp 4 chuyến đi mẫu (Quận 1, Landmark 81, Tân Sơn Nhất, Sala) để kiểm tra bản đồ và biểu đồ.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleLoadDemoGps}
+              style={{
+                padding: '6px 12px',
+                fontSize: '11.5px',
+                borderRadius: '8px',
+                background: 'rgba(255, 255, 255, 0.08)',
+                border: '1px solid rgba(255, 255, 255, 0.2)',
+                color: '#f8fafc',
+                cursor: 'pointer',
+              }}
+            >
+              + Nạp chuyến đi mẫu
+            </button>
           </div>
         </div>
       </div>

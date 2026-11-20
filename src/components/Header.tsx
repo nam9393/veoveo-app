@@ -38,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   const [ytOpen, setYtOpen] = useState(false);
   const [ytPlaying, setYtPlaying] = useState(false);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(() => getNotificationStatus().permission);
+  const [toolsOpen, setToolsOpen] = useState(false);
 
   const handleSoundClick = () => {
     onToggleSound();
@@ -70,70 +71,22 @@ export const Header: React.FC<HeaderProps> = ({
       </div>
 
       <div className="row" style={{ alignItems: 'center', flexWrap: 'wrap', gap: '6px' }}>
-        {/* MP3 Background Music Player: Forever Tonight (Peter Cetera & Julie) */}
-        <BackgroundMusicPlayer
-          onOpenYouTube={() => {
-            setYtOpen(true);
-            setYtPlaying(true);
-          }}
-        />
-
-        {/* YouTube Music Radio Player (Link: https://www.youtube.com/watch?v=1w1rqnZjQdE) */}
-        <button
-          type="button"
-          onClick={() => {
-            setYtOpen((p) => !p);
-            if (!ytPlaying) setYtPlaying(true);
-          }}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            borderRadius: '20px',
-            background: ytPlaying
-              ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.28) 0%, rgba(185, 28, 28, 0.4) 100%)'
-              : 'rgba(255, 255, 255, 0.08)',
-            border: `1.5px solid ${ytPlaying ? '#ef4444' : 'rgba(255, 255, 255, 0.18)'}`,
-            padding: '4px 10px',
-            gap: '6px',
-            color: ytPlaying ? '#fca5a5' : 'var(--mut)',
-            fontSize: '11.5px',
-            fontWeight: 700,
-            cursor: 'pointer',
-            boxShadow: ytPlaying ? '0 0 12px rgba(239, 68, 68, 0.45)' : undefined,
-          }}
-          title="Bật / Mở trình phát nhạc YouTube Lái Xe"
-        >
-          <span>{ytPlaying ? '🔴' : '▶️'}</span>
-          <span>YouTube</span>
-          {ytPlaying && <span style={{ fontSize: '9px', color: '#10b981' }}>● Phát</span>}
-        </button>
-
-        {/* Browser Push Notifications Button */}
-        <button
-          type="button"
-          onClick={handleToggleNotifications}
-          style={{
-            padding: '4px 9px',
-            borderRadius: '20px',
-            background: notifPerm === 'granted' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-            border: `1px solid ${notifPerm === 'granted' ? '#10b981' : 'rgba(255, 255, 255, 0.18)'}`,
-            color: notifPerm === 'granted' ? '#34d399' : 'var(--mut)',
-            fontSize: '11.5px',
-            fontWeight: 600,
-            display: 'flex',
-            alignItems: 'center',
-            gap: '4px',
-            cursor: 'pointer',
-          }}
-          title={
-            notifPerm === 'granted'
-              ? 'Thông báo đẩy trình duyệt: Đã bật (Bấm để gửi thông báo thử)'
-              : 'Bấm để bật thông báo trình duyệt nhắc lịch bảo dưỡng, nhiên liệu sắp cạn, mất GPS'
-          }
-        >
-          <span>🔔</span>
-          <span>{notifPerm === 'granted' ? 'Thông báo ON' : 'Bật thông báo'}</span>
-        </button>
+        {/* Vehicle Selector */}
+        {vehicles.length > 0 && (
+          <select
+            id="veh"
+            aria-label="Chọn xe"
+            value={currentVehicleId || ''}
+            onChange={(e) => onSelectVehicle(e.target.value)}
+          >
+            {vehicles.map((v) => (
+              <option key={v.id} value={v.id}>
+                {v.name}
+                {v.plate ? ` · ${v.plate}` : ''}
+              </option>
+            ))}
+          </select>
+        )}
 
         {/* User Account / Google Drive Sync Button */}
         <button
@@ -176,22 +129,7 @@ export const Header: React.FC<HeaderProps> = ({
           {currentUser && <span style={{ fontSize: '9px', color: '#10b981' }}>●</span>}
         </button>
 
-        {vehicles.length > 0 && (
-          <select
-            id="veh"
-            aria-label="Chọn xe"
-            value={currentVehicleId || ''}
-            onChange={(e) => onSelectVehicle(e.target.value)}
-          >
-            {vehicles.map((v) => (
-              <option key={v.id} value={v.id}>
-                {v.name}
-                {v.plate ? ` · ${v.plate}` : ''}
-              </option>
-            ))}
-          </select>
-        )}
-
+        {/* Sound FX Toggle */}
         <button
           ref={soundBtnRef}
           type="button"
@@ -203,8 +141,99 @@ export const Header: React.FC<HeaderProps> = ({
           {soundEnabled ? '🔊' : '🔇'}
         </button>
 
-        <ZipDownloadModal />
-        <PWAInstallButton />
+        {/* Mobile Tools Toggle Button */}
+        <button
+          type="button"
+          className="mobile-tools-btn"
+          onClick={() => setToolsOpen((p) => !p)}
+          style={{
+            padding: '4px 10px',
+            borderRadius: '20px',
+            background: toolsOpen ? 'rgba(56, 189, 248, 0.25)' : 'rgba(255, 255, 255, 0.08)',
+            border: `1px solid ${toolsOpen ? '#38bdf8' : 'rgba(255, 255, 255, 0.18)'}`,
+            color: toolsOpen ? '#38bdf8' : 'var(--mut)',
+            fontSize: '11.5px',
+            fontWeight: 600,
+            cursor: 'pointer',
+          }}
+          title="Mở các tiện ích phụ"
+        >
+          <span>⚡ Tiện ích {toolsOpen ? '▲' : '▼'}</span>
+        </button>
+
+        {/* Utilities Group (Desktop inline / Mobile expandable) */}
+        <div
+          className={`header-tools-group ${toolsOpen ? 'open' : ''}`}
+          style={{ display: 'flex', alignItems: 'center', gap: '6px', flexWrap: 'wrap' }}
+        >
+          {/* MP3 Background Music Player: Forever Tonight (Peter Cetera & Julie) */}
+          <BackgroundMusicPlayer
+            onOpenYouTube={() => {
+              setYtOpen(true);
+              setYtPlaying(true);
+            }}
+          />
+
+          {/* YouTube Music Radio Player */}
+          <button
+            type="button"
+            onClick={() => {
+              setYtOpen((p) => !p);
+              if (!ytPlaying) setYtPlaying(true);
+            }}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              borderRadius: '20px',
+              background: ytPlaying
+                ? 'linear-gradient(135deg, rgba(239, 68, 68, 0.28) 0%, rgba(185, 28, 28, 0.4) 100%)'
+                : 'rgba(255, 255, 255, 0.08)',
+              border: `1.5px solid ${ytPlaying ? '#ef4444' : 'rgba(255, 255, 255, 0.18)'}`,
+              padding: '4px 10px',
+              gap: '6px',
+              color: ytPlaying ? '#fca5a5' : 'var(--mut)',
+              fontSize: '11.5px',
+              fontWeight: 700,
+              cursor: 'pointer',
+              boxShadow: ytPlaying ? '0 0 12px rgba(239, 68, 68, 0.45)' : undefined,
+            }}
+            title="Bật / Mở trình phát nhạc YouTube Lái Xe"
+          >
+            <span>{ytPlaying ? '🔴' : '▶️'}</span>
+            <span>YouTube</span>
+            {ytPlaying && <span style={{ fontSize: '9px', color: '#10b981' }}>● Phát</span>}
+          </button>
+
+          {/* Browser Push Notifications Button */}
+          <button
+            type="button"
+            onClick={handleToggleNotifications}
+            style={{
+              padding: '4px 9px',
+              borderRadius: '20px',
+              background: notifPerm === 'granted' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+              border: `1px solid ${notifPerm === 'granted' ? '#10b981' : 'rgba(255, 255, 255, 0.18)'}`,
+              color: notifPerm === 'granted' ? '#34d399' : 'var(--mut)',
+              fontSize: '11.5px',
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: '4px',
+              cursor: 'pointer',
+            }}
+            title={
+              notifPerm === 'granted'
+                ? 'Thông báo đẩy trình duyệt: Đã bật (Bấm để gửi thông báo thử)'
+                : 'Bấm để bật thông báo trình duyệt nhắc lịch bảo dưỡng, nhiên liệu sắp cạn, mất GPS'
+            }
+          >
+            <span>🔔</span>
+            <span>{notifPerm === 'granted' ? 'Thông báo ON' : 'Bật thông báo'}</span>
+          </button>
+
+          <ZipDownloadModal />
+          <PWAInstallButton />
+        </div>
       </div>
 
       <YouTubeMusicPlayer

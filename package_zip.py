@@ -49,5 +49,17 @@ for target in [os.path.join(ROOT_DIR, 'dist'), os.path.join(ROOT_DIR, 'docs')]:
         try:
             shutil.copy2(SOURCE_ZIP, target)
             shutil.copy2(WEB_ZIP, target)
-        except Exception:
-            pass
+            # Ensure assets from public/assets (like MP3 chill music) are copied
+            public_assets = os.path.join(PUBLIC_DIR, 'assets')
+            target_assets = os.path.join(target, 'assets')
+            if os.path.exists(public_assets) and os.path.exists(target_assets):
+                for item in os.listdir(public_assets):
+                    s = os.path.join(public_assets, item)
+                    d = os.path.join(target_assets, item)
+                    if os.path.isdir(s):
+                        if not os.path.exists(d):
+                            shutil.copytree(s, d)
+                    else:
+                        shutil.copy2(s, d)
+        except Exception as e:
+            print("Sync warning:", e)

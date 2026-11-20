@@ -243,42 +243,13 @@ export function parseVoiceKeywordCommand(transcript: string, currentOdo?: number
   return null;
 }
 
-// Call Gemini AI on backend to parse natural language or complex commands
+// Call Gemini AI directly from client or fallback
+import { parseCommandWithGemini } from '../services/geminiService';
+
 export async function parseWithGeminiAI(
   text: string,
   currentOdo: number,
   vehicleName: string
 ): Promise<ParsedCommand | null> {
-  try {
-    const res = await fetch('/api/gemini/parse-command', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text, currentOdo, vehicleName }),
-    });
-
-    if (!res.ok) {
-      return null;
-    }
-
-    const json = await res.json();
-    if (json.success && json.data) {
-      const d = json.data;
-      return {
-        type: d.type || 'fuel',
-        amount: d.amount || 0,
-        odo: d.odo != null ? d.odo : currentOdo,
-        note: d.note || '',
-        price: d.price,
-        liters: d.liters,
-        full: d.full != null ? d.full : true,
-        ft: d.ft,
-        partName: d.partName,
-        explanation: d.explanation,
-        source: 'gemini-ai',
-      };
-    }
-  } catch (err) {
-    console.error('Gemini parse error:', err);
-  }
-  return null;
+  return parseCommandWithGemini(text, currentOdo, vehicleName);
 }

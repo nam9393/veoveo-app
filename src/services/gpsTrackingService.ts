@@ -102,14 +102,19 @@ class GpsTrackingService {
    */
   public getTraveledRoutes(vehicleId: string): GpsRoute[] {
     if (!vehicleId) return [];
-    let routes = this.pruneOldRoutes(vehicleId);
+    return this.pruneOldRoutes(vehicleId);
+  }
 
-    // If completely empty, populate with realistic starter trips across the past 3 days
-    if (routes.length === 0) {
-      routes = this.generateStarterRoutes(vehicleId);
-      this.saveRoutes(vehicleId, routes);
-    }
-
+  /**
+   * Explicitly load demo starter routes when user wants to preview GPS
+   */
+  public populateDemoRoutes(vehicleId: string): GpsRoute[] {
+    if (!vehicleId) return [];
+    const routes = this.generateStarterRoutes(vehicleId);
+    this.saveRoutes(vehicleId, routes);
+    this.saveAccumulatedKm(vehicleId, 14.8);
+    this.accumulatedKm = 14.8;
+    this.broadcastStatus();
     return routes;
   }
 
@@ -283,7 +288,7 @@ class GpsTrackingService {
       const v = localStorage.getItem(`${STORAGE_PREFIX_KM}${vehicleId}`);
       if (v) return parseFloat(v) || 0;
     } catch {}
-    return 14.8;
+    return 0;
   }
 
   private saveAccumulatedKm(vehicleId: string, km: number) {

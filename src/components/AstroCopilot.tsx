@@ -1,5 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { ParsedCommand, parseVoiceKeywordCommand, parseWithGeminiAI } from '../utils/voiceParser';
+import { ParsedCommand, parseVoiceKeywordCommand } from '../utils/voiceParser';
+import {
+  callGeminiChat,
+  hasGeminiApiKey,
+  parseCommandWithGemini,
+  getAIPersona,
+} from '../services/geminiService';
 import { playChimeSound, playConfirmSound } from '../utils/sound';
 import { Vehicle } from '../types';
 
@@ -25,11 +31,17 @@ export const AstroCopilot: React.FC<AstroCopilotProps> = ({
 
   // AI Chat state
   const [aiChatOpen, setAiChatOpen] = useState(false);
+  const [isCollapsed, setIsCollapsed] = useState(false);
   const [aiMessages, setAiMessages] = useState<Array<{ sender: 'user' | 'copilot'; text: string; id: string }>>([
     {
       id: 'init-msg',
       sender: 'copilot',
-      text: 'Dạ nè anh yêu ơi! Em là Vy nè, nữ trợ lý riêng cực kỳ ngọt ngào và chu đáo của anh đây nè. Xe cộ có em ngó giùm, máy móc êm ru bà rù, chạy ngọt xớt nghen anh thương! Anh muốn em chỉ mẹo tiết kiệm xăng, chu kỳ thay nhớt máy hay có chuyện gì cứ nói nhỏ vô tai em nha!',
+      text:
+        getAIPersona() === 'expert'
+          ? '⚙️ Kỹ sư ô tô Veo sẵn sàng! Tôi có thể tư vấn định mức nhớt, chu kỳ bảo dưỡng, tối ưu tiêu hao xăng và chẩn đoán tình trạng xe.'
+          : getAIPersona() === 'friendly'
+          ? '👋 Chào bạn! Mình là Trợ lý đồng hành Veo. Bạn cần hỏi về mốc bảo dưỡng, tiết kiệm xăng hay tra cứu phụ tùng cứ hỏi mình nhé!'
+          : '🌸 Dạ nè anh yêu ơi! Em là Vy nè, nữ trợ lý riêng cực kỳ ngọt ngào và chu đáo của anh đây nè. Xe cộ có em ngó giùm, máy móc êm ru bà rù, chạy ngọt xớt nghen anh thương! Anh muốn em chỉ mẹo tiết kiệm xăng, chu kỳ thay nhớt máy hay có chuyện gì cứ nói nhỏ vô tai em nha!',
     },
   ]);
   const [chatInput, setChatInput] = useState('');
@@ -447,7 +459,7 @@ Anh cần em xem mức tiêu hao xăng, lịch thay nhớt máy hay muốn trò 
 
     // 2. Deep Gemini AI parsing
     try {
-      const geminiParsed = await parseWithGeminiAI(
+      const geminiParsed = await parseCommandWithGemini(
         text,
         currentOdo,
         currentVehicle?.name || 'Phương tiện'
@@ -685,23 +697,14 @@ Anh cần em xem mức tiêu hao xăng, lịch thay nhớt máy hay muốn trò 
     setIsChatLoading(true);
 
     try {
-      const res = await fetch('/api/gemini/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          message: userText,
-          context: {
-            vehicleName: currentVehicle?.name,
-            plate: currentVehicle?.plate,
-            currentOdo,
-            tank: currentVehicle?.tank,
-            cons: currentVehicle?.cons,
-          },
-        }),
+      const replyText = await callGeminiChat(userText, {
+        vehicleName: currentVehicle?.name,
+        plate: currentVehicle?.plate,
+        currentOdo,
+        tank: currentVehicle?.tank,
+        cons: currentVehicle?.cons,
       });
 
-      const data = await res.json();
-      const replyText = data && data.reply ? data.reply : getClientFallbackAdvice(userText);
       const aiMsgId = 'ai-' + Date.now();
       setAiMessages((prev) => [...prev, { id: aiMsgId, sender: 'copilot', text: replyText }]);
 
@@ -737,37 +740,75 @@ Anh cần em xem mức tiêu hao xăng, lịch thay nhớt máy hay muốn trò 
         marginBottom: '14px',
       }}
     >
-      <div className="row" style={{ justifyContent: 'space-between', marginBottom: '8px' }}>
+      <div className="row" style={{ justifyContent: 'space-between', marginBottom: isCollapsed ? 0 : '8px', alignItems: 'center' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
           <span style={{ fontSize: '18px' }}>🚗</span>
           <div>
-            <h2 style={{ margin: 0, fontSize: '14.5px', color: 'var(--acc)' }}>
-              Trợ Lý Xe Ô Tô AI · Giọng Nói Hai Chiều
-            </h2>
-            <small style={{ color: 'var(--mut)', fontSize: '11px' }}>
-              Tự động lắng nghe & Tự động điền form khi dứt câu (không cần bấm nạp)
-            </small>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <h2 style={{ margin: 0, fontSize: '14.5px', color: 'var(--acc)' }}>
+                Trợ Lý Xe Ô Tô AI
+              </h2>
+              <span
+                style={{
+                  fontSize: '10px',
+                  padding: '1px 6px',
+                  borderRadius: '10px',
+                  background: hasGeminiApiKey() ? 'rgba(16, 185, 129, 0.2)' : 'rgba(255, 255, 255, 0.08)',
+                  color: hasGeminiApiKey() ? '#34d399' : 'var(--mut)',
+                  border: `1px solid ${hasGeminiApiKey() ? '#10b981' : 'rgba(255, 255, 255, 0.15)'}`,
+                }}
+              >
+                {hasGeminiApiKey() ? '✨ Gemini AI' : '💡 Trợ lý Offline'}
+              </span>
+            </div>
+            {!isCollapsed && (
+              <small style={{ color: 'var(--mut)', fontSize: '11px', display: 'block' }}>
+                Tự động lắng nghe & Tự động điền form khi dứt câu
+              </small>
+            )}
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={() => {
-            setAiChatOpen((prev) => !prev);
-            stopSpeaking();
-          }}
-          style={{
-            fontSize: '12px',
-            padding: '5px 11px',
-            background: aiChatOpen ? 'rgba(255, 255, 255, 0.12)' : 'rgba(255, 255, 255, 0.05)',
-            borderColor: 'var(--line)',
-            color: '#f8fafc',
-            fontWeight: 600,
-          }}
-        >
-          💬 {aiChatOpen ? 'Đóng hỏi đáp' : 'Hỏi đáp AI bằng Giọng nói'}
-        </button>
+        <div style={{ display: 'flex', gap: '6px', alignItems: 'center' }}>
+          <button
+            type="button"
+            onClick={() => {
+              setAiChatOpen((prev) => !prev);
+              if (isCollapsed) setIsCollapsed(false);
+              stopSpeaking();
+            }}
+            style={{
+              fontSize: '11.5px',
+              padding: '4px 9px',
+              background: aiChatOpen ? 'rgba(56, 189, 248, 0.2)' : 'rgba(255, 255, 255, 0.05)',
+              borderColor: aiChatOpen ? '#38bdf8' : 'var(--line)',
+              color: '#f8fafc',
+              fontWeight: 600,
+              borderRadius: '8px',
+            }}
+          >
+            💬 {aiChatOpen ? 'Đóng hỏi đáp' : 'Hỏi đáp AI'}
+          </button>
+          <button
+            type="button"
+            onClick={() => setIsCollapsed((prev) => !prev)}
+            style={{
+              fontSize: '11px',
+              padding: '4px 8px',
+              background: 'rgba(255, 255, 255, 0.05)',
+              borderColor: 'var(--line)',
+              color: 'var(--mut)',
+              borderRadius: '8px',
+            }}
+            title={isCollapsed ? 'Mở rộng khung Trợ lý AI' : 'Thu gọn khung Trợ lý AI'}
+          >
+            {isCollapsed ? 'Mở rộng ▼' : 'Thu gọn ▲'}
+          </button>
+        </div>
       </div>
+
+      {!isCollapsed && (
+        <>
 
       {/* Voice Quick Command Bar */}
       <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
@@ -1120,6 +1161,8 @@ Anh cần em xem mức tiêu hao xăng, lịch thay nhớt máy hay muốn trò 
             </button>
           </form>
         </div>
+      )}
+        </>
       )}
     </div>
   );

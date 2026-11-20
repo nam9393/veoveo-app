@@ -87,7 +87,7 @@ export const YouTubeMusicPlayer: React.FC<YouTubeMusicPlayerProps> = ({
         position: 'fixed',
         bottom: '20px',
         right: '20px',
-        zIndex: 9998,
+        zIndex: 950,
         width: isMinimized ? '280px' : '360px',
         maxWidth: 'calc(100vw - 32px)',
         background: 'rgba(15, 23, 42, 0.96)',

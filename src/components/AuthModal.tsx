@@ -1,7 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { UserAccount, AppState } from '../types';
 import { uploadToGoogleDrive, downloadFromGoogleDrive } from '../utils/googleDriveSync';
-import { connectGoogleDrive, uploadDrive, pullDrive, fetchGoogleUserProfile } from '../utils/sync';
+import {
+  connectGoogleDrive,
+  uploadDrive,
+  pullDrive,
+  fetchGoogleUserProfile,
+  getStoredClientId,
+} from '../utils/sync';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -45,6 +51,15 @@ export const AuthModal: React.FC<AuthModalProps> = ({
 
   // Google Sign-In with Google Drive Permission
   const handleGoogleSignIn = async () => {
+    const cid = getStoredClientId();
+    if (!cid || cid.indexOf('DAN_') === 0) {
+      setNotice({
+        msg: '⚠️ Tính năng đồng bộ Google Drive cần Client ID. Bạn hãy nhập Client ID trong Cài Đặt hoặc tạo tài khoản thiết bị ở form bên dưới để dùng ngay!',
+        type: 'info',
+      });
+      return;
+    }
+
     setIsSyncing(true);
     setNotice({ msg: 'Đang kết nối tài khoản Google và mở ủy quyền Google Drive...', type: 'info' });
 
@@ -199,7 +214,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       style={{
         position: 'fixed',
         inset: 0,
-        zIndex: 9999,
+        zIndex: 100000,
         background: 'rgba(2, 6, 23, 0.85)',
         backdropFilter: 'blur(8px)',
         display: 'flex',

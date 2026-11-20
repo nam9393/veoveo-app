@@ -2,6 +2,10 @@ import React, { useState } from 'react';
 
 export const ZipDownloadModal: React.FC = () => {
   const [isOpen, setIsOpen] = useState(false);
+  const baseUrl = (import.meta as any).env?.BASE_URL || './';
+  const cleanBase = baseUrl.endsWith('/') ? baseUrl : baseUrl + '/';
+  const sourceZipUrl = `${cleanBase}veoveo-app-source.zip`;
+  const webZipUrl = `${cleanBase}veoveo-app-web-dist.zip`;
 
   return (
     <>
@@ -32,7 +36,7 @@ export const ZipDownloadModal: React.FC = () => {
           style={{
             position: 'fixed',
             inset: 0,
-            zIndex: 9999,
+            zIndex: 100000,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
@@ -110,7 +114,7 @@ export const ZipDownloadModal: React.FC = () => {
                   </div>
                 </div>
                 <a
-                  href="/veoveo-app-source.zip"
+                  href={sourceZipUrl}
                   download="veoveo-app-source.zip"
                   className="pri"
                   style={{
@@ -147,7 +151,7 @@ export const ZipDownloadModal: React.FC = () => {
                   </div>
                 </div>
                 <a
-                  href="/veoveo-app-web-dist.zip"
+                  href={webZipUrl}
                   download="veoveo-app-web-dist.zip"
                   className="pri"
                   style={{

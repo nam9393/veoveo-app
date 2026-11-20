@@ -118,6 +118,27 @@ h2 {
   margin-bottom: 14px;
 }
 
+.mobile-tools-btn {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .mobile-tools-btn {
+    display: inline-flex !important;
+    align-items: center;
+  }
+  .header-tools-group {
+    display: none !important;
+    width: 100%;
+    padding-top: 6px;
+    border-top: 1px dashed rgba(255, 255, 255, 0.1);
+    margin-top: 4px;
+  }
+  .header-tools-group.open {
+    display: flex !important;
+  }
+}
+
 .row {
   display: flex;
   gap: 8px;
@@ -541,6 +562,12 @@ textarea {
   backdrop-filter: blur(20px);
   margin-bottom: 14px;
   overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+
+.hud-nav::-webkit-scrollbar {
+  display: none;
 }
 
 .hud-nav-item {
