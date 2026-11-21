@@ -85,7 +85,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
         avatar: realAvatar,
         provider: 'google',
         createdAt: new Date().toISOString(),
-        lastSync: new Date().toLocaleTimeString('vi-VN'),
+        lastSync: 'Chưa đồng bộ',
         remember,
       };
 
@@ -128,7 +128,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       avatar: '👤',
       provider: 'local',
       createdAt: new Date().toISOString(),
-      lastSync: new Date().toLocaleTimeString('vi-VN'),
+      lastSync: 'Chưa đồng bộ',
       remember,
     };
 
@@ -149,13 +149,28 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     }, 900);
   };
 
+  // Helper: wrap a promise with a timeout
+  const withTimeout = <T,>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
+    return Promise.race([
+      promise,
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error(`${label}: quá thời gian chờ (${ms / 1000}s). Kiểm tra kết nối mạng hoặc token Google Drive.`)), ms)
+      ),
+    ]);
+  };
+
   // Manual Sync to Google Drive
   const handleManualSyncNow = async () => {
     setIsSyncing(true);
     setNotice({ msg: 'Đang tải toàn bộ dữ liệu xe và lộ trình lên Google Drive...', type: 'info' });
 
+    // Safety auto-reset after 15 seconds regardless
+    const safetyTimer = setTimeout(() => {
+      setIsSyncing(false);
+    }, 15000);
+
     try {
-      await uploadDrive(appState);
+      await withTimeout(uploadDrive(appState), 10000, 'Đồng bộ lên Drive');
       const nowStr = new Date().toLocaleTimeString('vi-VN');
       onUpdateSyncStatus(`Đã lưu đám mây lúc ${nowStr}`);
       if (currentUser) {
@@ -167,8 +182,16 @@ export const AuthModal: React.FC<AuthModalProps> = ({
       }
       setNotice({ msg: 'Đồng bộ lên Google Drive thành công!', type: 'success' });
     } catch (err: any) {
-      setNotice({ msg: `Lỗi đồng bộ: ${err.message || 'Kiểm tra kết nối'}`, type: 'error' });
+      const msg = err?.message || 'Kiểm tra kết nối';
+      const isGitHubPages = window.location.hostname.includes('github.io');
+      setNotice({
+        msg: isGitHubPages
+          ? `⚠️ Đồng bộ thất bại: Trang GitHub Pages không hỗ trợ backend Google Drive. Hãy dùng tính năng "Tải file ZIP" để sao lưu dữ liệu.`
+          : `Lỗi đồng bộ: ${msg}`,
+        type: 'error',
+      });
     } finally {
+      clearTimeout(safetyTimer);
       setIsSyncing(false);
     }
   };
@@ -178,8 +201,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({
     setIsSyncing(true);
     setNotice({ msg: 'Đang tìm và tải bản sao lưu từ Google Drive...', type: 'info' });
 
+    // Safety auto-reset after 15 seconds
+    const safetyTimer = setTimeout(() => {
+      setIsSyncing(false);
+      setNotice({ msg: '⚠️ Tải dữ liệu bị quá thời gian. Vui lòng thử lại.', type: 'error' });
+    }, 15000);
+
     try {
-      const data = await pullDrive();
+      const data = await withTimeout(pullDrive(), 10000, 'Tải từ Drive');
       if (!data) {
         setNotice({ msg: 'Chưa tìm thấy bản sao lưu nào trên Google Drive.', type: 'info' });
         return;
@@ -192,11 +221,26 @@ export const AuthModal: React.FC<AuthModalProps> = ({
           cur: data.vehicles[0] ? data.vehicles[0].id : null,
           tomb: data.tomb || {},
         });
+        const nowStr = new Date().toLocaleTimeString('vi-VN');
+        if (currentUser) {
+          const updated = { ...currentUser, lastSync: `Khôi phục lúc ${nowStr}` };
+          onUserChange(updated);
+          if (remember) {
+            localStorage.setItem('veo_user_account', JSON.stringify(updated));
+          }
+        }
         setNotice({ msg: `Khôi phục thành công ${data.vehicles.length} xe từ Google Drive!`, type: 'success' });
       }
     } catch (err: any) {
-      setNotice({ msg: `Không thể tải dữ liệu: ${err.message || 'Lỗi kết nối'}`, type: 'error' });
+      const isGitHubPages = window.location.hostname.includes('github.io');
+      setNotice({
+        msg: isGitHubPages
+          ? '⚠️ Tải thất bại: Trang GitHub Pages không hỗ trợ backend Google Drive. Hãy dùng tính năng "Nhập từ file JSON" để khôi phục.'
+          : `Không thể tải dữ liệu: ${err.message || 'Lỗi kết nối'}`,
+        type: 'error',
+      });
     } finally {
+      clearTimeout(safetyTimer);
       setIsSyncing(false);
     }
   };

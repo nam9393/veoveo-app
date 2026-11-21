@@ -120,13 +120,28 @@ export const BackgroundMusicPlayer: React.FC<BackgroundMusicPlayerProps> = ({ on
 
       {/* Floating Glassmorphic Music Player Popover */}
       {isOpen && (
+        <>
+        {/* Backdrop overlay */}
         <div
           style={{
-            position: 'absolute',
-            top: 'calc(100% + 8px)',
-            right: 0,
+            position: 'fixed',
+            inset: 0,
+            zIndex: 9998,
+            background: 'rgba(0, 0, 0, 0.3)',
+          }}
+          onClick={() => setIsOpen(false)}
+        />
+        <div
+          style={{
+            position: 'fixed',
+            top: '50%',
+            left: '50%',
+            transform: 'translate(-50%, -50%)',
             zIndex: 9999,
             width: '320px',
+            maxWidth: '95vw',
+            maxHeight: '90vh',
+            overflowY: 'auto',
             background: 'linear-gradient(145deg, rgba(15, 23, 42, 0.98) 0%, rgba(30, 41, 59, 0.96) 100%)',
             backdropFilter: 'blur(16px)',
             borderRadius: '16px',
@@ -422,6 +437,7 @@ export const BackgroundMusicPlayer: React.FC<BackgroundMusicPlayerProps> = ({ on
             </div>
           )}
         </div>
+        </>
       )}
 
       {/* Global CSS Keyframes for Wave & Disc Rotation */}

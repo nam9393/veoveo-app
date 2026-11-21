@@ -22,12 +22,14 @@ export interface BgMusicState {
   track: BgMusicTrack;
 }
 
+const FALLBACK_URL = 'https://raw.githubusercontent.com/nam9393/veoveo-app/main/public/assets/aistudio/Forever_tonight__PETER_CATERA___JULIE__6db7d2e3.mp3';
+
 // Compute base-aware URL for Vite & GitHub Pages
 const getTrackSrc = (): string => {
   if (typeof window !== 'undefined') {
-    const pathname = window.location.pathname;
-    const dir = pathname.substring(0, pathname.lastIndexOf('/') + 1);
-    return `${dir}assets/aistudio/Forever_tonight__PETER_CATERA___JULIE__6db7d2e3.mp3`;
+    const base = (import.meta as any).env?.BASE_URL || './';
+    const cleanBase = base.endsWith('/') ? base : base + '/';
+    return `${cleanBase}assets/aistudio/Forever_tonight__PETER_CATERA___JULIE__6db7d2e3.mp3`;
   }
   const base = (import.meta as any).env?.BASE_URL || './';
   const cleanBase = base.endsWith('/') ? base : base + '/';
@@ -79,6 +81,33 @@ function getOrCreateAudio(): HTMLAudioElement {
   audio.volume = currentVolume;
   audio.src = DEFAULT_TRACK.src;
 
+  let loadResolved = false;
+  let fallbackTimer: ReturnType<typeof setTimeout> | null = null;
+
+  const switchToFallback = () => {
+    if (loadResolved) return;
+    loadResolved = true;
+    if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+    if (audio.src !== FALLBACK_URL) {
+      console.warn('BgMusic: primary source failed, switching to fallback URL');
+      const wasPlaying = isAudioPlaying;
+      audio.src = FALLBACK_URL;
+      if (wasPlaying) {
+        audio.play().catch(() => {});
+      }
+    }
+  };
+
+  // If not ready within 3 seconds, switch to fallback
+  fallbackTimer = setTimeout(switchToFallback, 3000);
+
+  audio.addEventListener('canplaythrough', () => {
+    if (!loadResolved) {
+      loadResolved = true;
+      if (fallbackTimer) { clearTimeout(fallbackTimer); fallbackTimer = null; }
+    }
+  }, { once: true });
+
   audio.onplay = () => {
     isAudioPlaying = true;
     try {
@@ -109,13 +138,9 @@ function getOrCreateAudio(): HTMLAudioElement {
 
   audio.onerror = () => {
     // Try raw GitHub fallback if relative asset path fails
-    const fallbackPath = 'https://raw.githubusercontent.com/nam9393/veoveo-app/main/public/assets/aistudio/Forever_tonight__PETER_CATERA___JULIE__6db7d2e3.mp3';
-    if (audio.src !== fallbackPath) {
-      audio.src = fallbackPath;
-      if (isAudioPlaying) {
-        audio.play().catch(() => {});
-      }
-    } else {
+    switchToFallback();
+    if (audio.src === FALLBACK_URL) {
+      // Even the fallback failed
       isAudioPlaying = false;
       notifyListeners();
     }

@@ -38,6 +38,13 @@ export const Header: React.FC<HeaderProps> = ({
   const [ytOpen, setYtOpen] = useState(false);
   const [ytPlaying, setYtPlaying] = useState(false);
   const [notifPerm, setNotifPerm] = useState<NotificationPermission>(() => getNotificationStatus().permission);
+  const [notifEnabled, setNotifEnabled] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('veo_notif_enabled');
+      return saved !== '0';
+    } catch { return true; }
+  });
+  const [notifFeedback, setNotifFeedback] = useState<string | null>(null);
   const [toolsOpen, setToolsOpen] = useState(false);
 
   const handleSoundClick = () => {
@@ -47,15 +54,38 @@ export const Header: React.FC<HeaderProps> = ({
     }
   };
 
+  const showNotifFeedback = (msg: string) => {
+    setNotifFeedback(msg);
+    setTimeout(() => setNotifFeedback(null), 2000);
+  };
+
   const handleToggleNotifications = async () => {
+    if (notifEnabled) {
+      // Turn OFF
+      setNotifEnabled(false);
+      try { localStorage.setItem('veo_notif_enabled', '0'); } catch {}
+      showNotifFeedback('🔕 Đã tắt thông báo');
+      return;
+    }
+
+    // Turn ON
+    setNotifEnabled(true);
+    try { localStorage.setItem('veo_notif_enabled', '1'); } catch {}
+
     if (notifPerm !== 'granted') {
       const p = await requestNotificationPermission();
       setNotifPerm(p);
       if (p === 'granted') {
         await sendTestNotification();
+        showNotifFeedback('🔔 Thông báo đã bật!');
+      } else if (p === 'denied') {
+        showNotifFeedback('⚠️ Trình duyệt đã chặn thông báo');
+      } else {
+        showNotifFeedback('🔔 Thông báo đã bật (nội bộ)');
       }
     } else {
       await sendTestNotification();
+      showNotifFeedback('🔔 Thông báo đã bật!');
     }
   };
 
@@ -211,25 +241,39 @@ export const Header: React.FC<HeaderProps> = ({
             style={{
               padding: '4px 9px',
               borderRadius: '20px',
-              background: notifPerm === 'granted' ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
-              border: `1px solid ${notifPerm === 'granted' ? '#10b981' : 'rgba(255, 255, 255, 0.18)'}`,
-              color: notifPerm === 'granted' ? '#34d399' : 'var(--mut)',
+              background: notifEnabled ? 'rgba(16, 185, 129, 0.15)' : 'rgba(255, 255, 255, 0.08)',
+              border: `1px solid ${notifEnabled ? '#10b981' : 'rgba(255, 255, 255, 0.18)'}`,
+              color: notifEnabled ? '#34d399' : 'var(--mut)',
               fontSize: '11.5px',
               fontWeight: 600,
               display: 'flex',
               alignItems: 'center',
               gap: '4px',
               cursor: 'pointer',
+              transition: 'all 0.2s ease',
             }}
             title={
-              notifPerm === 'granted'
-                ? 'Thông báo đẩy trình duyệt: Đã bật (Bấm để gửi thông báo thử)'
+              notifEnabled
+                ? 'Thông báo đẩy trình duyệt: Đã bật (Bấm để tắt)'
                 : 'Bấm để bật thông báo trình duyệt nhắc lịch bảo dưỡng, nhiên liệu sắp cạn, mất GPS'
             }
           >
-            <span>🔔</span>
-            <span>{notifPerm === 'granted' ? 'Thông báo ON' : 'Bật thông báo'}</span>
+            <span>{notifEnabled ? '🔔' : '🔕'}</span>
+            <span>{notifEnabled ? 'Thông báo ON' : 'Thông báo OFF'}</span>
           </button>
+          {notifFeedback && (
+            <span
+              style={{
+                fontSize: '10.5px',
+                color: '#fef08a',
+                fontWeight: 600,
+                animation: 'fadeIn 0.3s ease',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {notifFeedback}
+            </span>
+          )}
 
           <ZipDownloadModal />
           <PWAInstallButton />
